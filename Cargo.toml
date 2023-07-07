@@ -1,0 +1,17 @@
+[package]
+name = "mikanos_rust"
+version = "0.1.1"
+edition = "2021"
+authors = ["Paul Sohn <paulsohn@outlook.kr>"]
+description = "personal rust implementation of [Mikan OS](https://github.com/uchan-nos/mikanos)"
+
+build = "build.rs"
+
+[dependencies]
+
+[build-dependencies]
+# add these with `$ cargo add --build cc`
+cc = "1.0.79"
+fatfs = "0.3.6"
+
+[workspace]
