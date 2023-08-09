@@ -8,6 +8,12 @@ description = "personal rust implementation of [Mikan OS](https://github.com/uch
 build = "build.rs"
 
 [dependencies]
+uefi = { version = "0.24.0", features = ["alloc"] }
+uefi-macros = "0.12.0"
+uefi-services = "0.21.0"
+
+[unstable]
+build-std = ["core", "compiler_builtins", "alloc"]
 
 [build-dependencies]
 # add these with `$ cargo add --build cc`
