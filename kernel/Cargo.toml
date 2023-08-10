@@ -1,0 +1,12 @@
+[package]
+name = "kernel"
+version = "0.1.0"
+edition = "2021"
+authors = ["Paul Sohn <paulsohn@outlook.kr>"]
+description = "the kernel part of personal rust implementation of [Mikan OS](https://github.com/uchan-nos/mikanos)"
+
+[dependencies]
+
+
+[unstable]
+build-std = ["core", "compiler_builtins", "alloc"]
