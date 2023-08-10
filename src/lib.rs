@@ -36,6 +36,7 @@ impl<const CAP: usize> BufferWriter<CAP> {
         self.cursor == 0
     }
 
+    #[inline]
     pub fn as_slice(&self) -> &[u8] {
         &self.buf[..self.cursor]
     }
