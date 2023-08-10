@@ -21,7 +21,7 @@ use core::slice::from_raw_parts_mut;
 use core::mem::size_of;
 use core::fmt::Write;
 
-use mikanos_rust::BufferWriter;
+use bootloader::BufferWriter;
 
 #[inline]
 fn uefi_boot(image_handle: uefi::Handle, system_table: &mut SystemTable<Boot>) -> uefi::Result {

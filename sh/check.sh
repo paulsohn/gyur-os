@@ -1,0 +1,1 @@
+cargo check --workspace --target x86_64-unknown-uefi
