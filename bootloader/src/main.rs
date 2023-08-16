@@ -24,7 +24,9 @@ use core::fmt::Write;
 use bootloader::BufferWriter;
 
 #[inline]
-fn uefi_boot(image_handle: uefi::Handle, system_table: &mut SystemTable<Boot>) -> uefi::Result {
+fn uefi_boot(image_handle: uefi::Handle, system_table: &mut SystemTable<Boot>)
+    -> uefi::Result<*const (), ()>
+{
     uefi_services::init(system_table)?;
 
     // get boot services
@@ -73,7 +75,7 @@ fn uefi_boot(image_handle: uefi::Handle, system_table: &mut SystemTable<Boot>) -
     };
     mmap_file.flush()?;
 
-    writeln!(system_table.stdout(), "Memory map saved");
+    writeln!(system_table.stdout(), "Memory map file write success");
 
     // read kernel file
     // relavent `uefi::fs::FileSystem` method: `root_fs.metadata(...)` and `root_fs.read(...)` which returns a vector result.
@@ -82,37 +84,49 @@ fn uefi_boot(image_handle: uefi::Handle, system_table: &mut SystemTable<Boot>) -
         .open(KERNEL_FILE_NAME, FileMode::Read, FileAttribute::empty())?
         .into_regular_file().unwrap();
 
+    writeln!(system_table.stdout(), "Kernel file read success");
+
     // retrieve kernel info and allocate page
-    const KERNEL_FILE_INFO_BUF_SIZE: usize = 3 * size_of::<u64>() + 3 * size_of::<uefi::table::runtime::Time>() + size_of::<FileAttribute>() + KERNEL_FILE_NAME.to_u16_slice_with_nul().len() * size_of::<Char16>();
-    // attempted `const BUF_SIZE = size_of::<FileInfo>() + 12 * size_of::<Char16>();` but unfortunately `FileInfo` is not sized..
+    const KERNEL_FILE_NAME_LEN: usize = KERNEL_FILE_NAME.to_u16_slice_with_nul().len();
+    const KERNEL_FILE_INFO_BUF_SIZE: usize = 3 * size_of::<u64>() + 3 * size_of::<uefi::table::runtime::Time>() + size_of::<FileAttribute>() + (KERNEL_FILE_NAME_LEN + 5) * size_of::<Char16>(); //5 is for extra padding
+    // attempted `const BUF_SIZE = size_of::<FileInfo>() + KERNEL_FILE_NAME_LEN * size_of::<Char16>();` but unfortunately `FileInfo` is not sized..
     let mut kernel_file_info_buffer = [0u8; KERNEL_FILE_INFO_BUF_SIZE];
     let kernel_file_info = kernel_file.get_info::<FileInfo>(&mut kernel_file_info_buffer)
         .map_err(|err| err.to_err_without_payload() )?;
     let kernel_file_size = kernel_file_info.file_size() as usize;
-    let kernel_base_addr: uefi::data_types::PhysicalAddress = 0x100000;
+    let kernel_base_addr: uefi::data_types::PhysicalAddress = 0x100000; // should be synced with kernel.json configuration
     system_table.boot_services().allocate_pages(
         boot::AllocateType::Address(kernel_base_addr),
         boot::MemoryType::LOADER_DATA,
         (kernel_file_size + boot::PAGE_SIZE - 1) / boot::PAGE_SIZE
     )?;
 
-    writeln!(system_table.stdout(), "kernel size: {}", kernel_file_size);
-
     // load the kernel
     let kernel_slice = unsafe{ from_raw_parts_mut(kernel_base_addr as *mut u8, kernel_file_size) };
     kernel_file.read(kernel_slice)?;
 
-    writeln!(system_table.stdout(), "kernel loaded");
-
-    system_table.boot_services().stall(10_000_000);
-
-    Ok(())
+    // determine the entry point
+    let kernel_entry_ptr = unsafe {
+        core::ptr::read((kernel_base_addr + 24) as *const u64) - 0x1000 // I don't know why 0x1000 is needed. Somebody help!
+    } as *const ();
+    Ok(kernel_entry_ptr)
 }
 
 #[entry]
 fn uefi_start(image_handle: uefi::Handle, mut system_table: SystemTable<Boot>) -> Status {
     match uefi_boot(image_handle, &mut system_table){
-        Ok(()) => Status::SUCCESS,
+        Ok(kernel_entry_ptr) => {
+            system_table.boot_services().stall(3_000_000); // stall for 3 seconds
+            writeln!(system_table.stdout(), "Executing kernel (Entry {:p})", kernel_entry_ptr);
+            let _ = system_table.exit_boot_services();
+
+            // let's roll!
+            unsafe {
+                let kernel_entry: extern "C" fn() = core::mem::transmute(kernel_entry_ptr);
+                kernel_entry();
+            }
+            Status::SUCCESS
+        },
         Err(err) => {
             writeln!(system_table.stdout(), "{}", err);
             err.status()

@@ -6,12 +6,12 @@ use core::arch::asm;
 use core::panic::PanicInfo;
 
 #[no_mangle]
-fn main() {
-    
+pub extern "C" fn _start() -> ! {
+    halt();
 }
 
 #[panic_handler]
-fn panic_handler(info: &PanicInfo) -> !{
+fn panic_handler(_info: &PanicInfo) -> !{
     halt()
 }
 
