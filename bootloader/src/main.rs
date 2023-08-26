@@ -20,15 +20,16 @@ use uefi::proto::{
 };
 use uefi_macros::cstr16;
 
+use elf::ElfBytes;
+use elf::endian::AnyEndian;
+
 use core::slice::from_raw_parts_mut;
 use core::mem::size_of;
 use core::fmt::Write;
 // use core::arch::asm;
 
 use bootloader::ArrayWriter;
-use shared::{
-    FrameBufferInfo,
-};
+use shared::FrameBufferInfo;
 
 #[inline]
 fn uefi_boot(image_handle: uefi::Handle, system_table: &mut SystemTable<Boot>)
@@ -88,8 +89,7 @@ fn uefi_boot(image_handle: uefi::Handle, system_table: &mut SystemTable<Boot>)
     // writeln!(system_table.stdout(), "Kernel file read success");
 
     // retrieve kernel info and allocate page
-    let kernel_base_addr: uefi::data_types::PhysicalAddress = 0x100000; // should be synced with target json configuration
-    // @TODO kernel should be a position-independent executable (PIE) if possible.
+    
     let kernel_file_size = {
         const KERNEL_FILE_NAME_LEN: usize = KERNEL_FILE_NAME.to_u16_slice_with_nul().len();
         const KERNEL_FILE_INFO_BUF_SIZE: usize = 3 * size_of::<u64>() + 3 * size_of::<uefi::table::runtime::Time>() + size_of::<FileAttribute>() + (KERNEL_FILE_NAME_LEN + 5) * size_of::<Char16>(); //5 is for extra padding
@@ -101,26 +101,68 @@ fn uefi_boot(image_handle: uefi::Handle, system_table: &mut SystemTable<Boot>)
 
         kernel_file_info.file_size() as usize
     };
-    system_table.boot_services().allocate_pages(
-        boot::AllocateType::Address(kernel_base_addr),
-        boot::MemoryType::LOADER_DATA,
-        (kernel_file_size + boot::PAGE_SIZE - 1) / boot::PAGE_SIZE
-    )?;
 
-    // load the kernel
-    let kernel_slice = unsafe{ from_raw_parts_mut(kernel_base_addr as *mut u8, kernel_file_size) };
-    kernel_file.read(kernel_slice)?;
+    // refering elf program headers, determine kernel base and bound addresses.
+    // load all segments and determine the kernel entry point address.
+    let kernel_entry_addr = {
+        // read the kernel and load into temporarily allocated area
+        let kernel_buffer_ptr = system_table.boot_services().allocate_pool(
+            boot::MemoryType::LOADER_DATA,
+            kernel_file_size
+        )?;
+        let kernel_buffer_slice = unsafe{ from_raw_parts_mut(kernel_buffer_ptr as *mut u8, kernel_file_size) };
+        kernel_file.read(kernel_buffer_slice)?;
 
-    // determine the entry point
-    let kernel_entry_ptr = unsafe {
-        // @TODO
-        // We have a page-sized displacement(0x1000).
-        // Maybe ELF intends to locate itself from the second(1) page, skipping the first(0) page?
-        core::ptr::read((kernel_base_addr + 24) as *const u64) - 0x1000
-    } as *const ();
+        let elf = ElfBytes::<AnyEndian>::minimal_parse(kernel_buffer_slice).unwrap();
+
+        // determine base and bound addresses.
+        let mut kernel_base_addr = u64::MAX; // after the iteration, this should be 0x100000 (as specified in target json configuration)
+        let mut kernel_bound_addr = u64::MIN; // naively this is kernel_base_addr + kernel_file_size, but we may have e.g. .bss section.
+        for phdr in elf.segments().unwrap().iter() {
+            if phdr.p_type != elf::abi::PT_LOAD { continue; }
+            // honestly, we want methods for 'assign if greater' and 'assign if less'.
+            kernel_base_addr = kernel_base_addr.min(phdr.p_vaddr);
+            kernel_bound_addr = kernel_bound_addr.max(phdr.p_vaddr + phdr.p_memsz);
+        }
+
+        // allocate real pages
+        let kernel_byte_count = (kernel_bound_addr - kernel_base_addr) as usize;
+        system_table.boot_services().allocate_pages(
+            boot::AllocateType::Address(kernel_base_addr),
+            boot::MemoryType::LOADER_DATA,
+            (kernel_byte_count + boot::PAGE_SIZE - 1) / boot::PAGE_SIZE
+        )?;
+
+        // copy segment data into real target, and fill zero if necessary
+        for phdr in elf.segments().unwrap().iter() {
+            if phdr.p_type != elf::abi::PT_LOAD { continue; }
+
+            unsafe{
+                core::ptr::copy(
+                    kernel_buffer_ptr.add(phdr.p_offset as usize),
+                    phdr.p_vaddr as *mut u8,
+                    phdr.p_filesz as usize
+                );
+                core::ptr::write_bytes(
+                    (phdr.p_vaddr as *mut u8).add(phdr.p_filesz as usize),
+                    0,
+                    phdr.p_memsz.saturating_sub(phdr.p_filesz) as usize
+                );
+            }
+        }
+
+        // abandon the temp buffer
+        // can we make this auto-drop?
+        system_table.boot_services().free_pool(kernel_buffer_ptr)?;
+
+        // determine the entry point (0x1000 displacement bug resolved!)
+        unsafe {
+            core::ptr::read((kernel_base_addr + 24) as *const u64)
+        }
+    };
 
     system_table.boot_services().stall(1_000_000); // stall for 1 second
-    writeln!(system_table.stdout(), "Executing kernel (Entry {:p})", kernel_entry_ptr).unwrap();
+    writeln!(system_table.stdout(), "Executing kernel (Entry {:p})", kernel_entry_addr as *const ()).unwrap();
 
     // get graphics output protocol info, into file
     // guess that if we open GOP protocol then stdout becomes no longer valid.
@@ -143,7 +185,7 @@ fn uefi_boot(image_handle: uefi::Handle, system_table: &mut SystemTable<Boot>)
         let kernel_entry: extern "sysv64" fn(
             FrameBufferInfo
         ) -> !
-            = core::mem::transmute(kernel_entry_ptr);
+            = core::mem::transmute(kernel_entry_addr);
         move || kernel_entry(
             frame_buffer_info
         )
