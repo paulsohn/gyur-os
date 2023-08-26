@@ -33,7 +33,7 @@ use shared::{
 
 #[inline]
 fn uefi_boot(image_handle: uefi::Handle, system_table: &mut SystemTable<Boot>)
--> uefi::Result<(extern "C" fn(KernelArgs), KernelArgs)>
+-> uefi::Result<(extern "C" fn(KernelArgs) /* -> ! */, KernelArgs)>
 {
     uefi_services::init(system_table)?;
 
@@ -142,7 +142,7 @@ fn uefi_boot(image_handle: uefi::Handle, system_table: &mut SystemTable<Boot>)
         //         .map_err(|err|err.to_err_without_payload())?;
         // };
         // gop_modes_file.flush()?;
-        
+
         FrameBufferInfo::new( gop.frame_buffer().as_mut_ptr(), gop.current_mode_info() )
     };
 
@@ -179,6 +179,9 @@ fn uefi_start(image_handle: uefi::Handle, mut system_table: SystemTable<Boot>) -
             // let's roll!
             kernel_entry(kernel_args);
 
+            loop {
+                unsafe { core::arch::asm!("hlt"); }
+            }
             Status::SUCCESS
         },
         Err(err) => {

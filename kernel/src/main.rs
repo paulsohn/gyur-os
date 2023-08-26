@@ -7,21 +7,46 @@ extern crate shared;
 use core::arch::asm;
 use core::panic::PanicInfo;
 
-use shared::FrameBufferInfo;
+use shared::{
+    KernelArgs,
+    // FrameBufferInfo
+};
 use kernel::{ ColorCode, Screen };
 
 #[no_mangle]
 pub extern "C" fn _start (
-    mut frame_buffer_info: FrameBufferInfo
+    kernel_args: KernelArgs
 ) -> ! {
-    // tmp
-    frame_buffer_info.base = 0x80000000 as *mut u8;
-    frame_buffer_info.stride = 0x320;
-    frame_buffer_info.hor_res = 0x320;
-    frame_buffer_info.ver_res = 0x258;
-    frame_buffer_info.format = shared::PixelFormat::Bgr;
+    // a disassembly tells us that in assembly level
+    // `kernel_args` is passed as a pointer in `rcx` register,
+    // referencing certain position on the system stack.
+    // However when we compile this kernel,
+    // the kernel binary is ignorant to `rcx`
+    // and attempts to find `kernel_args` from the top of the stack.
+    // I couldn't unify this FFI mismatch, so here arguments are retrieved from the register manually.
+    let kernel_args = unsafe {
+        let mut kernel_args_ptr: *const KernelArgs;
+        asm!(
+            "mov {0}, rcx",
+            out(reg) kernel_args_ptr
+        );
+        core::ptr::read(kernel_args_ptr)
+    };
 
-    let mut screen = Screen::from(frame_buffer_info);
+    // unsafe {
+    //     asm!(
+    //         "movq xmm0, {0}",
+    //         "movq xmm2, {1}",
+    //         "movq xmm4, {2}",
+    //         "movq xmm6, {3}",
+    //         in(reg) kernel_args.frame_buffer_info.base,
+    //         in(reg) kernel_args.frame_buffer_info.stride,
+    //         in(reg) kernel_args.frame_buffer_info.hor_res,
+    //         in(reg) kernel_args.frame_buffer_info.ver_res,
+    //     )
+    // }
+
+    let mut screen = Screen::from(kernel_args.frame_buffer_info);
     for x in 0..screen.hor_res {
         for y in 0..screen.ver_res {
             // screen.write_pixel( (x,y), ColorCode::YELLOW );
