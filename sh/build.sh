@@ -10,6 +10,6 @@ sudo cp ./target/x86_64-unknown-uefi/debug/bootloader.efi ./mnt/efi/boot/BOOTX64
 cd ./kernel
 cargo build
 cd ../
-sudo cp ./target/x86_64-gyul/debug/kernel ./mnt/kernel.elf
+sudo cp ./target/x86_64-gyur/debug/kernel ./mnt/kernel.elf
 
 sudo umount ./mnt
