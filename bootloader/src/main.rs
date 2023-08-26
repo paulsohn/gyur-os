@@ -33,14 +33,14 @@ use shared::{
 
 #[inline]
 fn uefi_boot(image_handle: uefi::Handle, system_table: &mut SystemTable<Boot>)
--> uefi::Result<(extern "C" fn(KernelArgs) /* -> ! */, KernelArgs)>
+-> uefi::Result<impl FnOnce()>
 {
     uefi_services::init(system_table)?;
 
     // print in stdout
     system_table.stdout().write_str("Hello, Rust!\n")
         .unwrap();
-    // writeln!(system_table.stdout(), "Hello, rust!\n");
+    // writeln!(system_table.stdout(), "Hello, rust!\n").unwrap();
 
     // get FAT32 file system for UEFI loader
     //
@@ -79,8 +79,6 @@ fn uefi_boot(image_handle: uefi::Handle, system_table: &mut SystemTable<Boot>)
     };
     mmap_file.flush()?;
 
-    // writeln!(system_table.stdout(), "Memory map file write success");
-
     // read kernel file
     // relavent `uefi::fs::FileSystem` method: `root_fs.metadata(...)` and `root_fs.read(...)` which returns a vector result.
     const KERNEL_FILE_NAME: &CStr16 = cstr16!("kernel.elf");
@@ -91,15 +89,19 @@ fn uefi_boot(image_handle: uefi::Handle, system_table: &mut SystemTable<Boot>)
     // writeln!(system_table.stdout(), "Kernel file read success");
 
     // retrieve kernel info and allocate page
-    const KERNEL_FILE_NAME_LEN: usize = KERNEL_FILE_NAME.to_u16_slice_with_nul().len();
-    const KERNEL_FILE_INFO_BUF_SIZE: usize = 3 * size_of::<u64>() + 3 * size_of::<uefi::table::runtime::Time>() + size_of::<FileAttribute>() + (KERNEL_FILE_NAME_LEN + 5) * size_of::<Char16>(); //5 is for extra padding
-    // attempted `const BUF_SIZE = size_of::<FileInfo>() + KERNEL_FILE_NAME_LEN * size_of::<Char16>();` but unfortunately `FileInfo` is not sized..
-    let mut kernel_file_info_buffer = [0u8; KERNEL_FILE_INFO_BUF_SIZE];
-    let kernel_file_info = kernel_file.get_info::<FileInfo>(&mut kernel_file_info_buffer)
-        .map_err(|err| err.to_err_without_payload() )?;
-    let kernel_file_size = kernel_file_info.file_size() as usize;
     let kernel_base_addr: uefi::data_types::PhysicalAddress = 0x100000; // should be synced with target json configuration
     // @TODO kernel should be a position-independent executable (PIE) if possible.
+    let kernel_file_size = {
+        const KERNEL_FILE_NAME_LEN: usize = KERNEL_FILE_NAME.to_u16_slice_with_nul().len();
+        const KERNEL_FILE_INFO_BUF_SIZE: usize = 3 * size_of::<u64>() + 3 * size_of::<uefi::table::runtime::Time>() + size_of::<FileAttribute>() + (KERNEL_FILE_NAME_LEN + 5) * size_of::<Char16>(); //5 is for extra padding
+        // attempted `const BUF_SIZE = size_of::<FileInfo>() + KERNEL_FILE_NAME_LEN * size_of::<Char16>();` but unfortunately `FileInfo` is not sized..
+
+        let mut kernel_file_info_buffer = [0u8; KERNEL_FILE_INFO_BUF_SIZE];
+        let kernel_file_info = kernel_file.get_info::<FileInfo>(&mut kernel_file_info_buffer)
+            .map_err(|err| err.to_err_without_payload() )?;
+
+        kernel_file_info.file_size() as usize
+    };
     system_table.boot_services().allocate_pages(
         boot::AllocateType::Address(kernel_base_addr),
         boot::MemoryType::LOADER_DATA,
@@ -113,7 +115,8 @@ fn uefi_boot(image_handle: uefi::Handle, system_table: &mut SystemTable<Boot>)
     // determine the entry point
     let kernel_entry_ptr = unsafe {
         // @TODO
-        // I don't know why do we have a page-sized displacement(0x1000). Somebody help!
+        // We have a page-sized displacement(0x1000).
+        // Maybe ELF intends to locate itself from the second(1) page, skipping the first(0) page?
         core::ptr::read((kernel_base_addr + 24) as *const u64) - 0x1000
     } as *const ();
 
@@ -127,61 +130,41 @@ fn uefi_boot(image_handle: uefi::Handle, system_table: &mut SystemTable<Boot>)
         let gop_handle = system_table.boot_services().get_handle_for_protocol::<GraphicsOutput>()?;
         let mut gop = system_table.boot_services().open_protocol_exclusive::<GraphicsOutput>(gop_handle)?;
 
-        // const GOP_MODES_FILE_NAME: &CStr16 = cstr16!("gop_modes.csv");
-        // let mut gop_modes_file = root_dir
-        //     .open(GOP_MODES_FILE_NAME, FileMode::CreateReadWrite, FileAttribute::empty())?
-        //     .into_regular_file().unwrap();
-        // for (i, mode) in gop.modes().enumerate() {
-        //     let mut content_buffer = ArrayWriter::<0x100>::new();
-        //     // let mut content_buffer = [0u8; 0x100];
-        //     writeln!(content_buffer,
-        //         "{},{:?},{:?},{:?},{}",
-        //         i, mode.info().resolution(), mode.info().pixel_format(), mode.info().pixel_bitmask(), mode.info().stride()
-        //     ).unwrap();
-        //     gop_modes_file.write(content_buffer.as_slice()) // .write(&content_buffer)
-        //         .map_err(|err|err.to_err_without_payload())?;
-        // };
-        // gop_modes_file.flush()?;
+        // can select other GOP modes (iterate by `gop.modes()`)
+        // but we will choose the default selected mode.
+        // @TODO: can we set mode at runtime(by kernel)?
 
         FrameBufferInfo::new( gop.frame_buffer().as_mut_ptr(), gop.current_mode_info() )
     };
 
     system_table.boot_services().stall(1_000_000);
 
-    // // kernel executing closure with parameters.
-    // let kernel_main = unsafe {
-    //     let kernel_entry: extern "C" fn(
-    //         FrameBufferInfo
-    //     ) = core::mem::transmute(kernel_entry_ptr);
-    //     // move || kernel_entry(
-    //     //     frame_buffer_info
-    //     // )
-    //     move || {
-    //         kernel_entry(frame_buffer_info);
-    //     }
-    // };
+    // kernel executing closure with parameters.
+    let kernel_main = unsafe {
+        let kernel_entry: extern "sysv64" fn(
+            KernelArgs
+        ) -> !
+            = core::mem::transmute(kernel_entry_ptr);
+        move || kernel_entry(
+            KernelArgs {
+                frame_buffer_info
+            }
+        )
+    };
 
-    Ok((
-        unsafe { core::mem::transmute(kernel_entry_ptr) },
-        KernelArgs {
-            frame_buffer_info
-        }
-    ))
+    Ok(kernel_main)
 }
 
 #[entry]
 fn uefi_start(image_handle: uefi::Handle, mut system_table: SystemTable<Boot>) -> Status {
     match uefi_boot(image_handle, &mut system_table){
-        Ok((kernel_entry, kernel_args)) => {
+        Ok(kernel_main) => {
             // exit the booting process.
             let _ = system_table.exit_boot_services();
 
-            // let's roll!
-            kernel_entry(kernel_args);
-
-            loop {
-                unsafe { core::arch::asm!("hlt"); }
-            }
+            // alright. let's roll!
+            kernel_main();
+            
             Status::SUCCESS
         },
         Err(err) => {

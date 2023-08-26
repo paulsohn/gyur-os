@@ -14,25 +14,9 @@ use shared::{
 use kernel::{ ColorCode, Screen };
 
 #[no_mangle]
-pub extern "C" fn _start (
+pub extern "sysv64" fn _start (
     kernel_args: KernelArgs
 ) -> ! {
-    // a disassembly tells us that in assembly level
-    // `kernel_args` is passed as a pointer in `rcx` register,
-    // referencing certain position on the system stack.
-    // However when we compile this kernel,
-    // the kernel binary is ignorant to `rcx`
-    // and attempts to find `kernel_args` from the top of the stack.
-    // I couldn't unify this FFI mismatch, so here arguments are retrieved from the register manually.
-    let kernel_args = unsafe {
-        let mut kernel_args_ptr: *const KernelArgs;
-        asm!(
-            "mov {0}, rcx",
-            out(reg) kernel_args_ptr
-        );
-        core::ptr::read(kernel_args_ptr)
-    };
-
     // unsafe {
     //     asm!(
     //         "movq xmm0, {0}",
