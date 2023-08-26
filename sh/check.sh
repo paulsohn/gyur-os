@@ -1,2 +1,7 @@
-cargo check --package bootloader --target x86_64-unknown-uefi
-cargo +nightly check --package kernel --target ./kernel.json
+cd ./bootloader
+cargo check
+cd ../
+
+cd ./kernel
+cargo check
+cd ../

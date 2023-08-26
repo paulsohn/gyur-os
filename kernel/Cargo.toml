@@ -6,7 +6,11 @@ authors = ["Paul Sohn <paulsohn@outlook.kr>"]
 description = "the kernel part of personal rust implementation of [Mikan OS](https://github.com/uchan-nos/mikanos)"
 
 [dependencies]
+# compiler_builtins_resolve = { package = "compiler_builtins", version = "0.1.101" }
+# compiler_builtins = "0.1.101"
+shared = { path = "../shared" }
+volatile = "0.5.1"
 
 
-[unstable]
-build-std = ["core", "compiler_builtins", "alloc"]
+# [unstable]
+# build-std = ["core", "compiler_builtins", "alloc"]

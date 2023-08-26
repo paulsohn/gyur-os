@@ -5,12 +5,12 @@
 
 use core::fmt;
 
-pub struct BufferWriter<const CAP: usize> {
+pub struct ArrayWriter<const CAP: usize> {
     buf: [u8; CAP],
     cursor: usize,
 }
 
-impl<const CAP: usize> BufferWriter<CAP> {
+impl<const CAP: usize> ArrayWriter<CAP> {
     #[inline]
     pub fn new() -> Self {
         Self { buf: [0u8; CAP], cursor: 0 }
@@ -42,7 +42,7 @@ impl<const CAP: usize> BufferWriter<CAP> {
     }
 }
 
-impl<const CAP: usize> fmt::Write for BufferWriter<CAP> {
+impl<const CAP: usize> fmt::Write for ArrayWriter<CAP> {
     fn write_str(&mut self, s: &str) -> fmt::Result {
         let cap = self.capacity();
         for (i, &b) in self.buf[self.cursor..cap].iter_mut()
