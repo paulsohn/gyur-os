@@ -113,7 +113,12 @@ fn uefi_boot(image_handle: uefi::Handle, system_table: &mut SystemTable<Boot>)
         let kernel_buffer_slice = unsafe{ from_raw_parts_mut(kernel_buffer_ptr as *mut u8, kernel_file_size) };
         kernel_file.read(kernel_buffer_slice)?;
 
+        // parse the kernel.
         let elf = ElfBytes::<AnyEndian>::minimal_parse(kernel_buffer_slice).unwrap();
+        // we can easily get entry address by peeking file header.
+        // but we have to load all segments (and free the pool) before exiting this block
+        // by loading each segment manually, 0x1000 displacement bug is resolved.
+        let kernel_entry_addr = elf.ehdr.e_entry;
 
         // determine base and bound addresses.
         let mut kernel_base_addr = u64::MAX; // after the iteration, this should be 0x100000 (as specified in target json configuration)
@@ -155,10 +160,7 @@ fn uefi_boot(image_handle: uefi::Handle, system_table: &mut SystemTable<Boot>)
         // can we make this auto-drop?
         system_table.boot_services().free_pool(kernel_buffer_ptr)?;
 
-        // determine the entry point (0x1000 displacement bug resolved!)
-        unsafe {
-            core::ptr::read((kernel_base_addr + 24) as *const u64)
-        }
+        kernel_entry_addr
     };
 
     system_table.boot_services().stall(1_000_000); // stall for 1 second
