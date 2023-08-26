@@ -28,9 +28,9 @@ impl FrameBufferInfo {
     }
 }
 
-/// kernel argument type
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-#[repr(C)]
-pub struct KernelArgs {
-    pub frame_buffer_info: FrameBufferInfo
-}
+// /// kernel argument type
+// #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+// #[repr(C)]
+// pub struct KernelArgs {
+//     pub frame_buffer_info: FrameBufferInfo
+// }

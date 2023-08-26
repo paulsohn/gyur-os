@@ -28,7 +28,6 @@ use core::fmt::Write;
 use bootloader::ArrayWriter;
 use shared::{
     FrameBufferInfo,
-    KernelArgs
 };
 
 #[inline]
@@ -142,13 +141,11 @@ fn uefi_boot(image_handle: uefi::Handle, system_table: &mut SystemTable<Boot>)
     // kernel executing closure with parameters.
     let kernel_main = unsafe {
         let kernel_entry: extern "sysv64" fn(
-            KernelArgs
+            FrameBufferInfo
         ) -> !
             = core::mem::transmute(kernel_entry_ptr);
         move || kernel_entry(
-            KernelArgs {
-                frame_buffer_info
-            }
+            frame_buffer_info
         )
     };
 
@@ -164,7 +161,7 @@ fn uefi_start(image_handle: uefi::Handle, mut system_table: SystemTable<Boot>) -
 
             // alright. let's roll!
             kernel_main();
-            
+
             Status::SUCCESS
         },
         Err(err) => {
