@@ -121,7 +121,7 @@ fn uefi_boot(image_handle: uefi::Handle, system_table: &mut SystemTable<Boot>)
         let kernel_entry_addr = elf.ehdr.e_entry;
 
         // determine base and bound addresses.
-        let mut kernel_base_addr = u64::MAX; // after the iteration, this should be 0x100000 (as specified in target json configuration)
+        let mut kernel_base_addr = u64::MAX; // after the iteration, this should be 0x200000 (or the address specified as `--image-base` linker option, in target json config)
         let mut kernel_bound_addr = u64::MIN; // naively this is kernel_base_addr + kernel_file_size, but we may have e.g. .bss section.
         for phdr in elf.segments().unwrap().iter() {
             if phdr.p_type != elf::abi::PT_LOAD { continue; }

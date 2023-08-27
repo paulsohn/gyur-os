@@ -12,11 +12,5 @@
     "panic-strategy": "abort",
     "disable-redzone": true,
     "relro-level": "off",
-    "features": "-mmx,-sse,+soft-float",
-    "pre-link-args": {
-        "ld.lld": [
-            "--image-base=0x100000",
-            "--static"
-        ]
-    }
+    "features": "-mmx,-sse,+soft-float"
 }
