@@ -1,6 +1,7 @@
 #![no_std]
 
-// extern crate compiler_builtins_resolve;
+pub mod sysfont;
+
 
 use shared::{
     FrameBufferInfo,
@@ -76,15 +77,13 @@ impl From<FrameBufferInfo> for Screen {
 impl Screen {
     /// write a color code into specific pixel.
     pub fn write_pixel(&mut self, (x, y): (usize, usize), c: ColorCode) {
-        // debug_assert!(x < self.hor_res);
-        // debug_assert!(y < self.ver_res);
+        debug_assert!(x < self.hor_res);
+        debug_assert!(y < self.ver_res);
 
         let bytes = (self.formatter)(c);
 
         unsafe {
             let dst = self.base.add(BYTES_PER_PIXEL * (self.stride * y + x));
-
-            // 4 * (frame_buffer_info.stride * y + x) + 1
 
             // volatile copy
             // @TODO can we try 'volatile copy' here? (commented out)
@@ -104,5 +103,21 @@ impl Screen {
             // dst.add(3).write_volatile(bytes[3]);
         }
         
+    }
+
+    pub fn write_ascii(&mut self, (x, y): (usize, usize), ch: u8, c: ColorCode) {
+        debug_assert!(ch <= 0x7f);
+
+        use sysfont::SYSFONT;
+        let bmp = &SYSFONT[ch as usize];
+
+        for dy in 0..16usize {
+            let row = bmp[dy];
+            for dx in 0..8usize {
+                if (row >> dx) & 1 != 0{
+                    self.write_pixel((x+dx,y+dy), c);
+                }
+            }
+        }
     }
 }

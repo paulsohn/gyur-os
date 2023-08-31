@@ -16,32 +16,23 @@ use kernel::{ ColorCode, Screen };
 pub extern "sysv64" fn _start (
     frame_buffer_info: FrameBufferInfo
 ) -> ! {
-    // unsafe {
-    //     asm!(
-    //         "movq xmm0, {0}",
-    //         "movq xmm2, {1}",
-    //         "movq xmm4, {2}",
-    //         "movq xmm6, {3}",
-    //         in(reg) frame_buffer_info.base,
-    //         in(reg) frame_buffer_info.stride,
-    //         in(reg) frame_buffer_info.hor_res,
-    //         in(reg) frame_buffer_info.ver_res,
-    //     )
-    // }
-
     let mut screen = Screen::from(frame_buffer_info);
     for x in 0..screen.hor_res {
         for y in 0..screen.ver_res {
-            // screen.write_pixel( (x,y), ColorCode::YELLOW );
-            screen.write_pixel(
-                (x,y),
-                ColorCode::rgb(
-                    u8::try_from(x % 256).unwrap(),
-                    u8::try_from(x % 256).unwrap(),
-                    u8::try_from(y % 256).unwrap()
-                )
-            );
+            screen.write_pixel( (x,y), ColorCode::YELLOW );
         }
+    }
+
+    for x in 0..200usize {
+        for y in 0..100usize {
+            screen.write_pixel( (x,y), ColorCode::GREEN );
+        }
+    }
+
+    let mut curx = 0usize;
+    for ch in 0x21..=0x7eu8 {
+        screen.write_ascii( (curx, 64), ch, ColorCode::BLACK );
+        curx += 8;
     }
 
     halt();
