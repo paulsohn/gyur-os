@@ -23,8 +23,8 @@ impl Console{
     pub fn new(screen: Screen) -> Self {
         Self {
             screen,
-            fg: ColorCode::BLACK,
-            bg: ColorCode::WHITE,
+            fg: ColorCode::WHITE,
+            bg: ColorCode::BLACK,
             buffer: [[b' '; CONSOLE_COLS]; CONSOLE_ROWS],
             // cur_row: 0,
             cur_col: 0,

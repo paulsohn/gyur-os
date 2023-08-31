@@ -31,15 +31,18 @@ pub extern "sysv64" fn _start (
     }
     console_println!("Hello, world!");
 
+    // panic!("intentional");
+
     halt();
 }
 
 #[panic_handler]
-fn panic_handler(_info: &PanicInfo) -> ! {
+fn panic_handler(info: &PanicInfo) -> ! {
     unsafe{
         // handy way to indicate panic, if QEMU debugger is enabled
         asm!("mov r11, 0xDEAD");
-    } 
+    }
+    console_println!("{}", info);
     halt()
 }
 
