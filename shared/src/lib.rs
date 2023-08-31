@@ -3,8 +3,6 @@ extern crate uefi;
 
 pub use uefi::proto::console::gop::{PixelFormat, ModeInfo};
 
-pub const BYTES_PER_PIXEL: usize = 4;
-
 /// Raw information about frame buffer which is passed from bootloader to kernel.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[repr(C)]

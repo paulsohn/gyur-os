@@ -1,6 +1,8 @@
 // modification of `freetype-rs/examples/single_glyph.rs`
 // to generate binary bitmap from otf font file
 
+#![allow(dead_code)]
+
 extern crate freetype as ft;
 
 const WIDTH: usize = 8;
