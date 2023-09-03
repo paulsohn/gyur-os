@@ -4,11 +4,15 @@ use crate::screen::{
     Screen
 };
 
+// use core::cell::OnceCell;
+use spin::{Mutex, Once};
+
 const CONSOLE_ROWS: usize = 25;
 const CONSOLE_COLS: usize = 80;
 
 pub struct Console {
-    screen: Screen, // @TODO screen should be owned or mut ref?
+    screen: &'static Mutex<Once<Screen>>,
+
     fg: ColorCode,
     bg: ColorCode,
     buffer: [[u8; CONSOLE_COLS]; CONSOLE_ROWS],
@@ -20,17 +24,19 @@ pub struct Console {
 }
 
 impl Console{
-    pub fn new(screen: Screen) -> Self {
-        Self {
+    pub fn new(screen: &'static Mutex<Once<Screen>>) -> Self {
+        let mut console = Self {
             screen,
             fg: ColorCode::WHITE,
-            bg: ColorCode::BLACK,
+            bg: ColorCode::GRAY,
             buffer: [[b' '; CONSOLE_COLS]; CONSOLE_ROWS],
             // cur_row: 0,
             cur_col: 0,
             // base_x: 0,
             //base_y : 0
-        }
+        };
+        console.render(); // initial rendering
+        console
     }
 
     /// get the pixel coordinate from given buffer position (i,j).
@@ -41,9 +47,23 @@ impl Console{
 
     /// refresh the screen by rendering chars in buffer.
     fn render(&mut self){
+        // to prevent E0716 (temporary value dropped while borrowed)
+        // we should acquire the lock each time and save into a variable
+        // to guarantee the lock is freed after we've finished using the underlying data
+
+        unsafe{ core::arch::asm!("mov r11, 0xCAFE1"); }
+
+        let mut screen_lock = self.screen.lock();
+        let screen = screen_lock.get_mut().unwrap();
+
+        // @TODO : seems that the lock is not properly released
+        // stops here at 2nd iteration
+
+        unsafe{ core::arch::asm!("mov r10, 0xCAFE2"); }
+
         for i in 0..CONSOLE_ROWS {
             for j in 0..CONSOLE_COLS {
-                self.screen.write_ascii(self.screen_coord((i,j)), self.buffer[i][j], self.fg, Some(self.bg));
+                screen.write_ascii(self.screen_coord((i,j)), self.buffer[i][j], self.fg, Some(self.bg));
             }
         }
     }
@@ -76,6 +96,9 @@ impl Console{
         // debug_assert!(j < CONSOLE_COLS);
         // debug_assert!(ch <= 0x7f);
 
+        let mut screen_lock = self.screen.lock();
+        let screen = screen_lock.get_mut().unwrap();
+
         match ch { // @todo : more control characters support
             b'\n' => self.newline(),
             ch => {
@@ -85,9 +108,10 @@ impl Console{
 
                 let i = CONSOLE_ROWS - 1;
                 let j = self.cur_col;
-                if ch != self.buffer[i][j] { // reduce render process, especially for whitespaces
+                if ch != self.buffer[i][j] { // reduce render processes, especially for whitespaces
                     self.buffer[i][j] = ch;
-                    self.screen.write_ascii(self.screen_coord((i,j)), ch, self.fg, Some(self.bg));
+
+                    screen.write_ascii(self.screen_coord((i,j)), ch, self.fg, Some(self.bg));
                 }
 
                 self.cur_col += 1;
@@ -109,3 +133,7 @@ impl core::fmt::Write for Console {
         Ok(())
     }
 }
+
+// @TODO remove unsafe impl
+unsafe impl Sync for Console {}
+unsafe impl Send for Console {}

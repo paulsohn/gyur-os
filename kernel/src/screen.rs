@@ -25,6 +25,8 @@ impl ColorCode {
     pub const MAGENTA: Self = Self { r:255, g:0, b:255 };
     pub const YELLOW : Self = Self { r:255, g:255, b:0 };
     pub const WHITE  : Self = Self { r:255, g:255, b:255 };
+
+    pub const GRAY   : Self = Self { r:127, g:127, b:127 };
 }
 
 const BYTES_PER_PIXEL: usize = 4;
@@ -124,5 +126,6 @@ impl Screen {
     }
 }
 
-// @TODO remove this unsafe implementation
+// @TODO remove unsafe impl
+unsafe impl Sync for Screen {}
 unsafe impl Send for Screen {}

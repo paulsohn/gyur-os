@@ -13,7 +13,7 @@ use kernel::{
     // console::Console,
 
     globals,
-    // console_print,
+    console_print,
     console_println
 };
 
@@ -26,12 +26,17 @@ pub extern "sysv64" fn _start (
         frame_buffer_info
     );
 
-    for i in 0..28 {
-        console_println!("line {:02}", i);
+    console_println!("Hello, World!");
+    console_print!("This is : GYUR OS");
+    for i in 0..20 {
+        console_println!();
+        console_print!("line {:02}", i);
     }
-    console_println!("Hello, world!");
+    // for _ in 0..23 {
+    //     console_println!();
+    // }
 
-    // panic!("intentional");
+    panic!("intentional");
 
     halt();
 }
