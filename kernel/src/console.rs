@@ -4,6 +4,7 @@ use crate::screen::{
     Screen
 };
 
+use core::ops::DerefMut;
 // use core::cell::OnceCell;
 use spin::{Mutex, Once};
 
@@ -11,7 +12,7 @@ const CONSOLE_ROWS: usize = 25;
 const CONSOLE_COLS: usize = 80;
 
 pub struct Console {
-    screen: &'static Mutex<Once<Screen>>,
+    screen: &'static Once<Mutex<Screen>>,
 
     fg: ColorCode,
     bg: ColorCode,
@@ -24,7 +25,7 @@ pub struct Console {
 }
 
 impl Console{
-    pub fn new(screen: &'static Mutex<Once<Screen>>) -> Self {
+    pub fn new(screen: &'static Once<Mutex<Screen>>) -> Self {
         let mut console = Self {
             screen,
             fg: ColorCode::WHITE,
@@ -53,8 +54,8 @@ impl Console{
 
         unsafe{ core::arch::asm!("mov r11, 0xCAFE1"); }
 
-        let mut screen_lock = self.screen.lock();
-        let screen = screen_lock.get_mut().unwrap();
+        let mut screen_lock = self.screen.get().unwrap().lock();
+        let screen = screen_lock.deref_mut();
 
         // @TODO : seems that the lock is not properly released
         // stops here at 2nd iteration
@@ -96,8 +97,8 @@ impl Console{
         // debug_assert!(j < CONSOLE_COLS);
         // debug_assert!(ch <= 0x7f);
 
-        let mut screen_lock = self.screen.lock();
-        let screen = screen_lock.get_mut().unwrap();
+        let mut screen_lock = self.screen.get().unwrap().lock();
+        let screen = screen_lock.deref_mut();
 
         match ch { // @todo : more control characters support
             b'\n' => self.newline(),

@@ -8,22 +8,22 @@ use core::fmt::{Arguments, Write};
 // use core::cell::OnceCell;
 use spin::{Mutex, Once};
 
-pub static SCREEN: Mutex<Once<Screen>> = Mutex::new(Once::new());
-pub static CONSOLE: Mutex<Once<Console>> = Mutex::new(Once::new());
+pub static SCREEN: Once<Mutex<Screen>> = Once::new();
+pub static CONSOLE: Once<Mutex<Console>> = Once::new();
 
 pub fn init_globals(
     frame_buffer_info: FrameBufferInfo
 ){
-    SCREEN.lock().call_once(|| {
-        Screen::from(frame_buffer_info)
+    SCREEN.call_once(|| {
+        Mutex::new(Screen::from(frame_buffer_info))
     });
-    CONSOLE.lock().call_once(|| {
-        Console::new(&SCREEN) // by invoking `new()`, we also render an empty console rectangle.
+    CONSOLE.call_once(|| {
+        Mutex::new(Console::new(&SCREEN)) // by invoking `new()`, we also render an empty console rectangle.
     });
 }
 
 pub fn _console_print(args: Arguments){
-    CONSOLE.lock().get_mut().unwrap().write_fmt(args).unwrap();
+    CONSOLE.get().unwrap().lock().write_fmt(args).unwrap();
 }
 
 #[macro_export]
