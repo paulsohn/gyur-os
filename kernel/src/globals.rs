@@ -5,19 +5,19 @@ use crate::screen::Screen;
 use crate::console::Console;
 
 use core::fmt::{Arguments, Write};
-// use core::cell::OnceCell;
-use spin::{Mutex, Once};
+use core::cell::OnceCell;
+use spin::Mutex; // `Mutex<OnceCell<T>>` mimics std `OnceLock`.
 
-pub static SCREEN: Mutex<Once<Screen>> = Mutex::new(Once::new());
-pub static CONSOLE: Mutex<Once<Console>> = Mutex::new(Once::new());
+pub static SCREEN: Mutex<OnceCell<Screen>> = Mutex::new(OnceCell::new());
+pub static CONSOLE: Mutex<OnceCell<Console>> = Mutex::new(OnceCell::new());
 
 pub fn init_globals(
     frame_buffer_info: FrameBufferInfo
 ){
-    SCREEN.lock().call_once(|| {
+    SCREEN.lock().get_or_init(|| {
         Screen::from(frame_buffer_info)
     });
-    CONSOLE.lock().call_once(|| {
+    CONSOLE.lock().get_or_init(|| {
         Console::new(&SCREEN) // by invoking `new()`, we also render an empty console rectangle.
     });
 }

@@ -4,14 +4,14 @@ use crate::screen::{
     Screen
 };
 
-// use core::cell::OnceCell;
-use spin::{Mutex, Once};
+use core::cell::OnceCell;
+use spin::Mutex;
 
 const CONSOLE_ROWS: usize = 25;
 const CONSOLE_COLS: usize = 80;
 
 pub struct Console {
-    screen: &'static Mutex<Once<Screen>>,
+    screen: &'static Mutex<OnceCell<Screen>>, // note: methods accessing `screen` should be limited to `render()` and `render_one()`, to avoid requiring lock twice ("self-deadlock")
 
     fg: ColorCode,
     bg: ColorCode,
@@ -24,7 +24,7 @@ pub struct Console {
 }
 
 impl Console{
-    pub fn new(screen: &'static Mutex<Once<Screen>>) -> Self {
+    pub fn new(screen: &'static Mutex<OnceCell<Screen>>) -> Self {
         let mut console = Self {
             screen,
             fg: ColorCode::WHITE,
@@ -51,21 +51,22 @@ impl Console{
         // we should acquire the lock each time and save into a variable
         // to guarantee the lock is freed after we've finished using the underlying data
 
-        unsafe{ core::arch::asm!("mov r11, 0xCAFE1"); }
-
         let mut screen_lock = self.screen.lock();
         let screen = screen_lock.get_mut().unwrap();
-
-        // @TODO : seems that the lock is not properly released
-        // stops here at 2nd iteration
-
-        unsafe{ core::arch::asm!("mov r10, 0xCAFE2"); }
 
         for i in 0..CONSOLE_ROWS {
             for j in 0..CONSOLE_COLS {
                 screen.render_ascii(self.screen_coord((i,j)), self.buffer[i][j], self.fg, Some(self.bg));
             }
         }
+    }
+
+    /// refresh certain coordinate with given character.
+    fn render_one(&mut self, (i, j): (usize, usize), ch: u8){
+        let mut screen_lock = self.screen.lock();
+        let screen = screen_lock.get_mut().unwrap();
+
+        screen.render_ascii(self.screen_coord((i,j)), ch, self.fg, Some(self.bg));
     }
 
     /// rewind column position(carrige)
@@ -96,9 +97,6 @@ impl Console{
         // debug_assert!(j < CONSOLE_COLS);
         // debug_assert!(ch <= 0x7f);
 
-        let mut screen_lock = self.screen.lock();
-        let screen = screen_lock.get_mut().unwrap();
-
         match ch { // @todo : more control characters support
             b'\n' => self.newline(),
             ch => {
@@ -111,7 +109,7 @@ impl Console{
                 if ch != self.buffer[i][j] { // reduce render processes, especially for whitespaces
                     self.buffer[i][j] = ch;
 
-                    screen.render_ascii(self.screen_coord((i,j)), ch, self.fg, Some(self.bg));
+                    self.render_one((i,j), ch);
                 }
 
                 self.cur_col += 1;

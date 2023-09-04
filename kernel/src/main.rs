@@ -28,15 +28,10 @@ pub extern "sysv64" fn _start (
 
     console_println!("Hello, World!");
     console_print!("This is : GYUR OS");
-    for i in 0..20 {
+    for i in 0..25 {
         console_println!();
         console_print!("line {:02}", i);
     }
-    // for _ in 0..23 {
-    //     console_println!();
-    // }
-
-    panic!("intentional");
 
     halt();
 }
