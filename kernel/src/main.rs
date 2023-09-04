@@ -26,25 +26,6 @@ pub extern "sysv64" fn _start (
         frame_buffer_info
     );
 
-    {
-        let mut console_lock = globals::CONSOLE.get().unwrap().lock();
-        let console = core::ops::DerefMut::deref_mut(&mut console_lock);
-
-        use core::fmt::Write;
-        console.write_str("Hello 1!\n").unwrap();
-        console.write_str("Hello 2!\n").unwrap();
-    }
-
-    {
-        let mut console_lock = globals::CONSOLE.get().unwrap().lock();
-        let console = core::ops::DerefMut::deref_mut(&mut console_lock);
-
-        use core::fmt::Write;
-        console.write_str("Hello 3!\n").unwrap();
-        console.write_str("Hello 4!\n").unwrap();
-    }
-
-
     console_println!("Hello, World!");
     console_print!("This is : GYUR OS");
     for i in 0..20 {

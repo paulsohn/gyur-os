@@ -96,7 +96,9 @@ fn render() {
     }
 }
 
-fn output() -> std::io::Result<()>  {
+fn main() -> std::io::Result<()> {
+    // render();
+
     use std::io::prelude::*;
 
     println!("static SYSFONT: [[u8; 16]; 128] = [");
@@ -128,51 +130,4 @@ fn output() -> std::io::Result<()>  {
     println!("];");
 
     Ok(())
-}
-
-
-
-use std::ops::DerefMut;
-use spin::{Once, Mutex};
-struct Foo(usize);
-
-impl Foo {
-    fn bar(&mut self) {
-        if self.0 < 80 {
-            println!("{}",self.0);
-            self.0 += 1;
-        }
-    }
-}
-
-struct Baz(&'static Once<Mutex<Foo>>);
-
-impl Baz {
-    fn qux(&mut self){
-        let mut lock = self.0.get().unwrap().lock();
-        lock.deref_mut().bar();
-    }
-}
-
-static FOO: Once<Mutex<Foo>> = Once::new();
-static BAZ: Once<Mutex<Baz>> = Once::new();
-
-fn main(){
-    // render();
-
-    // output();
-
-    FOO.call_once(|| {
-        Mutex::new(Foo(12))
-    });
-    BAZ.call_once(|| {
-        Mutex::new(Baz(&FOO))
-    });
-
-    for _ in 0..50 {
-        let mut lock = BAZ.get().unwrap().lock();
-        let baz = lock.deref_mut();
-
-        baz.qux();
-    }
 }
