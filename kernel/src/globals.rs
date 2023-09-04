@@ -14,12 +14,12 @@ pub static CONSOLE: Mutex<OnceCell<Console>> = Mutex::new(OnceCell::new());
 pub fn init(
     frame_buffer_info: FrameBufferInfo
 ){
-    SCREEN.lock().set(|| {
+    SCREEN.lock().get_or_init(|| {
         Screen::from(frame_buffer_info)
-    }).unwrap();
-    CONSOLE.lock().set(|| {
+    });
+    CONSOLE.lock().get_or_init(|| {
         Console::new(&SCREEN) // by invoking `new()`, we also render an empty console rectangle.
-    }).unwrap();
+    });
 }
 
 pub fn _console_print(args: Arguments){
