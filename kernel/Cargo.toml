@@ -1,6 +1,6 @@
 [package]
 name = "kernel"
-version = "1.0.0"
+version = "1.5.0"
 edition = "2021"
 authors = ["Paul Sohn <paulsohn@outlook.kr>"]
 description = "the kernel part of personal rust implementation of [Mikan OS](https://github.com/uchan-nos/mikanos)"
@@ -9,3 +9,4 @@ description = "the kernel part of personal rust implementation of [Mikan OS](htt
 shared = { path = "../shared" }
 spin = "0.9.8"
 volatile = "0.5.1"
+x86_64 = "0.14.10"

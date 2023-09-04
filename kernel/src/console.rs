@@ -10,6 +10,9 @@ use spin::Mutex;
 const CONSOLE_ROWS: usize = 25;
 const CONSOLE_COLS: usize = 80;
 
+const FONT_WIDTH_PX: usize = 8;
+const FONT_HEIGHT_PX: usize = 16;
+
 pub struct Console {
     screen: &'static Mutex<OnceCell<Screen>>, // note: methods accessing `screen` should be limited to `render()` and `render_one()`, to avoid requiring lock twice ("self-deadlock")
 
@@ -42,7 +45,7 @@ impl Console{
     /// get the pixel coordinate from given buffer position (i,j).
     fn screen_coord(&self, (i, j): (usize, usize)) -> (usize, usize){
         // (base_x+8*j,base_y+16*i)
-        (8*j, 16*i)
+        (FONT_WIDTH_PX*j, FONT_HEIGHT_PX*i)
     }
 
     /// refresh the screen by rendering chars in buffer.
@@ -69,23 +72,25 @@ impl Console{
         screen.render_ascii(self.screen_coord((i,j)), ch, self.fg, Some(self.bg));
     }
 
-    /// rewind column position(carrige)
-    /// this effectively mimics typewriter CR behavior.
+    /// Rewind column position(carrige).
+    /// This effectively mimics typewriter CR behavior.
+    #[inline]
     fn carrige_return(&mut self){
         self.cur_col = 0;
     }
 
-    /// raise buffer contents by a line.
-    /// this effectively mimics typewriter LF behavior, except rerendering.
-    /// for newline behavior including rerendering, use `newline()` instead.
+    /// Raise buffer contents by a line.
+    /// This effectively mimics typewriter LF behavior, except for rerendering.
+    /// for unix-like newline behavior including rerendering, use `newline()` instead.
+    #[inline]
     fn line_feed(&mut self){
-        for row in 1..CONSOLE_ROWS {
-            self.buffer[row - 1] = self.buffer[row];
-        }
-        self.buffer[CONSOLE_ROWS-1] = [b' '; CONSOLE_COLS];
+        self.buffer.copy_within(1.., 0);
+        self.buffer[CONSOLE_ROWS-1].fill(b' ');
+        // self.buffer.last_mut().unwrap().fill(b' ');
+        // self.buffer[CONSOLE_ROWS-1] = [b' '; CONSOLE_COLS];
     }
 
-    /// add new line.
+    /// Add new line.
     pub fn newline(&mut self){
         self.carrige_return();
         self.line_feed();
@@ -108,7 +113,6 @@ impl Console{
                 let j = self.cur_col;
                 if ch != self.buffer[i][j] { // reduce render processes, especially for whitespaces
                     self.buffer[i][j] = ch;
-
                     self.render_one((i,j), ch);
                 }
 
@@ -125,13 +129,11 @@ impl core::fmt::Write for Console {
     //     }
     // }
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
-        for ch in s.bytes() {
-            self.write_ascii(ch);
-        }
+        s.bytes().for_each(|ch| { self.write_ascii(ch); });
         Ok(())
     }
 }
 
 // @TODO remove unsafe impl
-unsafe impl Sync for Console {}
-unsafe impl Send for Console {}
+// unsafe impl Sync for Console {}
+// unsafe impl Send for Console {}

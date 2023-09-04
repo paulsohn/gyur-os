@@ -22,7 +22,7 @@ pub extern "sysv64" fn _start (
     frame_buffer_info: FrameBufferInfo
 ) -> ! {
     // initialize globals
-    globals::init_globals(
+    globals::init(
         frame_buffer_info
     );
 
@@ -38,16 +38,15 @@ pub extern "sysv64" fn _start (
 
 #[panic_handler]
 fn panic_handler(info: &PanicInfo) -> ! {
-    unsafe{
-        // handy way to indicate panic, if QEMU debugger is enabled
-        asm!("mov r11, 0xDEAD");
-    }
+    // handy way to indicate panic, if QEMU debugger is enabled
+    unsafe{ core::arch::asm!("mov r11, 0xDEAD"); }
+    
     console_println!("{}", info);
     halt()
 }
 
 fn halt() -> ! {
     loop{
-        unsafe{ asm!("hlt"); }
+        x86_64::instructions::hlt();
     }
 }

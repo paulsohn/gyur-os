@@ -11,15 +11,15 @@ use spin::Mutex; // `Mutex<OnceCell<T>>` mimics std `OnceLock`.
 pub static SCREEN: Mutex<OnceCell<Screen>> = Mutex::new(OnceCell::new());
 pub static CONSOLE: Mutex<OnceCell<Console>> = Mutex::new(OnceCell::new());
 
-pub fn init_globals(
+pub fn init(
     frame_buffer_info: FrameBufferInfo
 ){
-    SCREEN.lock().get_or_init(|| {
+    SCREEN.lock().set(|| {
         Screen::from(frame_buffer_info)
-    });
-    CONSOLE.lock().get_or_init(|| {
+    }).unwrap();
+    CONSOLE.lock().set(|| {
         Console::new(&SCREEN) // by invoking `new()`, we also render an empty console rectangle.
-    });
+    }).unwrap();
 }
 
 pub fn _console_print(args: Arguments){
