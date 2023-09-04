@@ -76,7 +76,7 @@ impl From<FrameBufferInfo> for Screen {
 
 impl Screen {
     /// write a color code into specific pixel.
-    fn write_pixel(&mut self, (x, y): (usize, usize), c: ColorCode) {
+    fn render_pixel(&mut self, (x, y): (usize, usize), c: ColorCode) {
         debug_assert!(x < self.hor_res);
         debug_assert!(y < self.ver_res);
 
@@ -94,7 +94,7 @@ impl Screen {
     pub fn fill_rect(&mut self, (x, y): (usize, usize), (w, h): (usize, usize), c: ColorCode){
         for xx in x..x+w {
             for yy in y..y+h {
-                self.write_pixel((xx,yy), c);
+                self.render_pixel((xx,yy), c);
             }
         }
     }
@@ -103,7 +103,7 @@ impl Screen {
         self.fill_rect((0,0),(self.hor_res, self.ver_res), c);
     }
     
-    pub fn write_ascii(&mut self, (x, y): (usize, usize), ch: u8, fg: ColorCode, bg: Option<ColorCode>) {
+    pub fn render_ascii(&mut self, (x, y): (usize, usize), ch: u8, fg: ColorCode, bg: Option<ColorCode>) {
         debug_assert!(ch <= 0x7f);
 
         let bmp = &SYSFONT[ch as usize];
@@ -116,7 +116,7 @@ impl Screen {
             let row = bmp[dy];
             for dx in 0..8usize {
                 if (row >> dx) & 1 != 0 {
-                    self.write_pixel((x+dx,y+dy), fg);
+                    self.render_pixel((x+dx,y+dy), fg);
                 }
                 // else if let Some(bg) = bg {
                 //     self.write_pixel((x+dx,y+dy), bg);

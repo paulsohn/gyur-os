@@ -63,7 +63,7 @@ impl Console{
 
         for i in 0..CONSOLE_ROWS {
             for j in 0..CONSOLE_COLS {
-                screen.write_ascii(self.screen_coord((i,j)), self.buffer[i][j], self.fg, Some(self.bg));
+                screen.render_ascii(self.screen_coord((i,j)), self.buffer[i][j], self.fg, Some(self.bg));
             }
         }
     }
@@ -111,7 +111,7 @@ impl Console{
                 if ch != self.buffer[i][j] { // reduce render processes, especially for whitespaces
                     self.buffer[i][j] = ch;
 
-                    screen.write_ascii(self.screen_coord((i,j)), ch, self.fg, Some(self.bg));
+                    screen.render_ascii(self.screen_coord((i,j)), ch, self.fg, Some(self.bg));
                 }
 
                 self.cur_col += 1;
