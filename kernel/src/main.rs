@@ -4,7 +4,6 @@
 
 extern crate shared;
 
-use core::arch::asm;
 use core::panic::PanicInfo;
 
 use shared::FrameBufferInfo;
@@ -40,7 +39,7 @@ pub extern "sysv64" fn _start (
 fn panic_handler(info: &PanicInfo) -> ! {
     // handy way to indicate panic, if QEMU debugger is enabled
     unsafe{ core::arch::asm!("mov r11, 0xDEAD"); }
-    
+
     console_println!("{}", info);
     halt()
 }

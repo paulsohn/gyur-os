@@ -133,7 +133,3 @@ impl core::fmt::Write for Console {
         Ok(())
     }
 }
-
-// @TODO remove unsafe impl
-// unsafe impl Sync for Console {}
-// unsafe impl Send for Console {}

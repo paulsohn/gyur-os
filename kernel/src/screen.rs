@@ -127,5 +127,5 @@ impl Screen {
 }
 
 // @TODO remove unsafe impl
-unsafe impl Sync for Screen {}
+// unsafe impl Sync for Screen {}
 unsafe impl Send for Screen {}
