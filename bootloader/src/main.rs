@@ -29,7 +29,7 @@ use core::fmt::Write;
 // use core::arch::asm;
 
 use bootloader::ArrayWriter;
-use shared::FrameBufferInfo;
+use shared::frame_buffer::FrameBuffer;
 
 #[inline]
 fn uefi_boot(image_handle: uefi::Handle, system_table: &mut SystemTable<Boot>)
@@ -169,7 +169,7 @@ fn uefi_boot(image_handle: uefi::Handle, system_table: &mut SystemTable<Boot>)
     // get graphics output protocol info, into file
     // guess that if we open GOP protocol then stdout becomes no longer valid.
     // so we keep this process as late as possible.
-    let frame_buffer_info = {
+    let frame_buffer = {
         let gop_handle = system_table.boot_services().get_handle_for_protocol::<GraphicsOutput>()?;
         let mut gop = system_table.boot_services().open_protocol_exclusive::<GraphicsOutput>(gop_handle)?;
 
@@ -177,7 +177,7 @@ fn uefi_boot(image_handle: uefi::Handle, system_table: &mut SystemTable<Boot>)
         // but we will choose the default selected mode.
         // @TODO: can we set mode at runtime(by kernel)?
 
-        FrameBufferInfo::new( gop.frame_buffer().as_mut_ptr(), gop.current_mode_info() )
+        FrameBuffer::new( gop.frame_buffer().as_mut_ptr(), gop.current_mode_info() )
     };
 
     system_table.boot_services().stall(1_000_000);
@@ -185,11 +185,11 @@ fn uefi_boot(image_handle: uefi::Handle, system_table: &mut SystemTable<Boot>)
     // kernel executing closure with parameters.
     let kernel_main = unsafe {
         let kernel_entry: extern "sysv64" fn(
-            FrameBufferInfo
+            FrameBuffer
         ) -> !
             = core::mem::transmute(kernel_entry_addr);
         move || kernel_entry(
-            frame_buffer_info
+            frame_buffer
         )
     };
 

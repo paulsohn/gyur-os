@@ -1,6 +1,6 @@
 // print, println macros: credit goes to https://os.phil-opp.com/vga-text-mode/
 
-use shared::FrameBufferInfo;
+use shared::frame_buffer::FrameBuffer;
 use crate::screen::Screen;
 use crate::console::Console;
 
@@ -12,10 +12,10 @@ pub static SCREEN: Mutex<OnceCell<Screen>> = Mutex::new(OnceCell::new());
 pub static CONSOLE: Mutex<OnceCell<Console>> = Mutex::new(OnceCell::new());
 
 pub fn init(
-    frame_buffer_info: FrameBufferInfo
+    frame_buffer: FrameBuffer
 ){
     SCREEN.lock().get_or_init(|| {
-        Screen::from(frame_buffer_info)
+        Screen::from(frame_buffer)
     });
     CONSOLE.lock().get_or_init(|| {
         Console::new(&SCREEN) // by invoking `new()`, we also render an empty console rectangle.

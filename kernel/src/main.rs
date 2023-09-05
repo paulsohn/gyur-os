@@ -6,7 +6,9 @@ extern crate shared;
 
 use core::panic::PanicInfo;
 
-use shared::FrameBufferInfo;
+use shared::{
+    frame_buffer::FrameBuffer
+};
 use kernel::{
     // screen::ColorCode,
     // console::Console,
@@ -18,19 +20,23 @@ use kernel::{
 
 #[no_mangle]
 pub extern "sysv64" fn _start (
-    frame_buffer_info: FrameBufferInfo
+    frame_buffer_info: FrameBuffer
 ) -> ! {
     // initialize globals
     globals::init(
         frame_buffer_info
     );
 
-    console_println!("Hello, World!");
-    console_print!("This is : GYUR OS");
-    for i in 0..25 {
+    console_print!("Hello, GYUR OS!");
+    for _ in 0..20 {
         console_println!();
         console_print!("line {:02}", i);
     }
+
+    // {
+    //     let mut screen_lock = globals::SCREEN.lock();
+    //     let screen = screen_lock.get_mut().unwrap();
+    // }
 
     halt();
 }
@@ -45,7 +51,5 @@ fn panic_handler(info: &PanicInfo) -> ! {
 }
 
 fn halt() -> ! {
-    loop{
-        x86_64::instructions::hlt();
-    }
+    loop{ x86_64::instructions::hlt(); }
 }

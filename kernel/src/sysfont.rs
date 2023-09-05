@@ -1,3 +1,6 @@
+pub const SYSFONT_WIDTH_PX: usize = 8;
+pub const SYSFONT_HEIGHT_PX: usize = 16;
+
 /// The system font for 7-bit ASCII characters, based on NOTO sans mono font (except for control characters symbol)
 /// Unlike custom font (which will be included later) the layout is always 8*16 bitmap,
 /// where each pixel is represented with a single bit.

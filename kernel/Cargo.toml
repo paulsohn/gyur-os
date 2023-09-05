@@ -8,5 +8,4 @@ description = "the kernel part of personal rust implementation of [Mikan OS](htt
 [dependencies]
 shared = { path = "../shared" }
 spin = "0.9.8"
-volatile = "0.5.1"
 x86_64 = "0.14.10"

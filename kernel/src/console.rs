@@ -3,15 +3,16 @@ use crate::screen::{
     ColorCode,
     Screen
 };
+use crate::sysfont::{
+    SYSFONT_WIDTH_PX,
+    SYSFONT_HEIGHT_PX,
+};
 
 use core::cell::OnceCell;
 use spin::Mutex;
 
 const CONSOLE_ROWS: usize = 25;
 const CONSOLE_COLS: usize = 80;
-
-const FONT_WIDTH_PX: usize = 8;
-const FONT_HEIGHT_PX: usize = 16;
 
 pub struct Console {
     screen: &'static Mutex<OnceCell<Screen>>, // note: methods accessing `screen` should be limited to `render()` and `render_one()`, to avoid requiring lock twice ("self-deadlock")
@@ -45,7 +46,7 @@ impl Console{
     /// get the pixel coordinate from given buffer position (i,j).
     fn screen_coord(&self, (i, j): (usize, usize)) -> (usize, usize){
         // (base_x+8*j,base_y+16*i)
-        (FONT_WIDTH_PX*j, FONT_HEIGHT_PX*i)
+        (SYSFONT_WIDTH_PX*j, SYSFONT_HEIGHT_PX*i)
     }
 
     /// refresh the screen by rendering chars in buffer.
