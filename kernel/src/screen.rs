@@ -65,6 +65,11 @@ impl From<FrameBuffer> for Screen {
 }
 
 impl Screen {
+    #[inline]
+    pub fn resolution(&self) -> (usize, usize) {
+        self.frame_buffer.resolution()
+    }
+
     /// write a color code into specific pixel.
     pub fn render_pixel(&mut self, (x, y): (usize, usize), c: ColorCode) {
         // debug_assert!(x < self.hor_res);

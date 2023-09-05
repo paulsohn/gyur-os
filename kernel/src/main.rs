@@ -6,12 +6,16 @@ extern crate shared;
 
 use core::panic::PanicInfo;
 
-use shared::{
-    frame_buffer::FrameBuffer
-};
+use shared::frame_buffer::FrameBuffer;
 use kernel::{
-    // screen::ColorCode,
+    screen::ColorCode,
     // console::Console,
+
+    cursor::{
+        SYSCURSOR_WIDTH,
+        SYSCURSOR_HEIGHT,
+        SYSCURSOR_SHAPE
+    },
 
     globals,
     console_print,
@@ -28,15 +32,29 @@ pub extern "sysv64" fn _start (
     );
 
     console_print!("Hello, GYUR OS!");
-    for _ in 0..20 {
+    for i in 0..20 {
         console_println!();
         console_print!("line {:02}", i);
     }
 
-    // {
-    //     let mut screen_lock = globals::SCREEN.lock();
-    //     let screen = screen_lock.get_mut().unwrap();
-    // }
+    {
+        let mut screen_lock = globals::SCREEN.lock();
+        let screen = screen_lock.get_mut().unwrap();
+
+        let x = 200usize;
+        let y = 100usize;
+
+        for xx in x..(x+SYSCURSOR_WIDTH).min(screen.resolution().0) {
+            for yy in y..(y+SYSCURSOR_HEIGHT).min(screen.resolution().1) {
+                let ch = match SYSCURSOR_SHAPE[yy-y][xx-x] {
+                    b'@' => ColorCode::BLACK,
+                    b'.' => ColorCode::WHITE,
+                    _ => continue, // transparent
+                };
+                screen.render_pixel((xx, yy), ch);
+            }
+        }
+    }
 
     halt();
 }
