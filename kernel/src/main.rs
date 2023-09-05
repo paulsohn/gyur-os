@@ -31,10 +31,14 @@ pub extern "sysv64" fn _start (
         frame_buffer_info
     );
 
-    console_print!("Hello, GYUR OS!");
-    for i in 0..20 {
-        console_println!();
-        console_print!("line {:02}", i);
+    console_println!("Hello, GYUR OS!");
+
+    use kernel::pci::{Device, Devices, vendor_id, class_code};
+    let devices = Devices::scan().unwrap();
+    for device in devices.as_slice() {
+        let vend = vendor_id(device.bus, device.dev, device.fun);
+        let class = class_code(device.bus, device.dev, device.fun);
+        console_println!("{}.{}.{}.: vend {:04x}, class {:08x}, head {:02x}", device.bus, device.dev, device.fun, vend, class, device.header_type);
     }
 
     {
