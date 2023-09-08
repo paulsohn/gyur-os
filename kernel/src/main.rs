@@ -33,13 +33,15 @@ pub extern "sysv64" fn _start (
 
     console_println!("Hello, GYUR OS!");
 
-    use kernel::pci::{Device, Devices, vendor_id, class_code};
+    use kernel::pci::Devices;
     let devices = Devices::scan().unwrap();
     for device in devices.as_slice() {
-        let vend = vendor_id(device.bus, device.dev, device.fun);
-        let class = class_code(device.bus, device.dev, device.fun);
-        console_println!("{}.{}.{}.: vend {:04x}, class {:08x}, head {:02x}", device.bus, device.dev, device.fun, vend, class, device.header_type);
+        console_println!("{}.{}.{}.: vend {:04x}, class {:08x}, head {:02x}", device.bus(), device.dev_fun().0, device.dev_fun().1, device.vendor_id(), device.class_code_rev() >> 8, device.header_type());
     }
+
+    // for i in 0..20 {
+    //     console_println!("Line {:02}", i);
+    // }
 
     {
         let mut screen_lock = globals::SCREEN.lock();
