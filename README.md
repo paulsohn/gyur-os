@@ -30,7 +30,9 @@ After build, run `./sh/run_qemu.sh` for executing QEMU.
   * Our text formatting heavily depends on `core::fmt::Write` trait.
   * For implementing singletons in rust, one of the easiest implementations is unsafe `static mut`. Instead, I chose to implement mutual-exclusive singleton like `std::sync::OnceLock` by combining `core::cell::OnceCell` and `spin::Mutex`, following @phil-opp fashion. I will switch to `static mut` when more performance-intensive processes are added.
   * Spent a couple of days for debugging that rendering function pauses. I would call this 'self-deadlock' in the sense that a method requiring a mutex lock calls another method requiring the same lock. Of course, this is merely a design mistake, and can be avoided by classifying methods which are able to wait for the lock.
-- [ ] Day 06
+- [ ] Day 06 (Mouse cursor implementation) '23.09.09.
+  * Implemented PCI scan algorithms, both brute-force and PCI-to-PCI bridge DFS.
+  * Modified `./sh/run_qemu.sh` to add `qemu-xhci` device.
 - [ ] Day 07
 
 ...and so on.

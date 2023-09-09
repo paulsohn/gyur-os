@@ -12,9 +12,9 @@ pub static SYSCURSOR_SHAPE: [&[u8; SYSCURSOR_WIDTH]; SYSCURSOR_HEIGHT] = [
     b"@......@ ",
     b"@....@@@@",
     b"@..@.@   ",
-    b"@.@ @.@  ",
+    b"@.@@.@   ",
     b"@@  @.@  ",
-    b"@    @.@ ",
+    b"@   @.@  ",
     b"     @.@ ",
     b"      @@ ",
 ];

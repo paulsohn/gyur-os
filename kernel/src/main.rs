@@ -33,10 +33,17 @@ pub extern "sysv64" fn _start (
 
     console_println!("Hello, GYUR OS!");
 
-    use kernel::pci::Devices;
+    use kernel::pci::{ Devices, Device };
     let devices = Devices::scan().unwrap();
-    for device in devices.as_slice() {
-        console_println!("{}.{}.{}.: vend {:04x}, class {:08x}, head {:02x}", device.bus(), device.dev_fun().0, device.dev_fun().1, device.vendor_id(), device.class_code_rev() >> 8, device.header_type());
+    for dev in devices.as_slice() {
+        console_println!("{}.{}.{}.: vend {:04x}, class {:06x}, head {:02x}", dev.bus(), dev.slot_fun().0, dev.slot_fun().1, dev.vendor_id(), dev.class_code().code(), dev.header_type());
+    }
+
+    let xhc_dev = devices.as_slice().iter().find(|&dev| {
+        dev.class_code().match_base_sub_interface(0x0c, 0x03, 0x30)
+    });
+    if let Some(dev) = xhc_dev {
+        console_println!("xHC has been found: {}.{}.{}.", dev.bus(), dev.slot_fun().0, dev.slot_fun().1);
     }
 
     // for i in 0..20 {

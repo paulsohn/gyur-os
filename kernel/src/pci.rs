@@ -1,29 +1,72 @@
 use x86_64::instructions::port::Port;
 
+/// PCI class code (base, sub, interface)
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ClassCode(u32);
+
+impl ClassCode {
+    pub const fn code(&self) -> u32 {
+        self.0
+    }
+
+    pub const fn base(&self) -> u8 {
+        ((self.0 >> 16) & 0xff) as u8
+    }
+
+    pub const fn sub(&self) -> u8 {
+        ((self.0 >> 8) & 0xff) as u8
+    }
+
+    pub const fn interface(&self) -> u8 {
+        (self.0 & 0xff) as u8
+    }
+
+    pub const fn match_base(&self, base: u8) -> bool {
+        self.base() == base
+        // self.0 & 0xff0000 == (base as u32) << 16
+    }
+
+    pub const fn match_base_sub(&self, base: u8, sub: u8) -> bool {
+        self.0 & 0xffff00 == ((base as u32) << 16) | ((sub as u32) << 8)
+    }
+
+    pub const fn match_base_sub_interface(&self, base: u8, sub: u8, interface: u8) -> bool {
+        self.0 == u32::from_le_bytes([interface, sub, base, 0])
+        // self.0 == ((base as u32) << 16) | ((sub as u32) << 8) | (interface as u32)
+    }
+}
+
+impl From<u32> for ClassCode {
+    /// convert 3-bit integer into class code.
+    fn from(code: u32) -> Self {
+        Self(code & 0xffffff)
+    }
+}
+
 const CFG_ADDR_PORT_NO: u16 = 0x0cf8;
 const CFG_DATA_PORT_NO: u16 = 0x0cfc;
 
 /// PCI device.
 /// Internally a device is identified by its config header address.
 /// Config info abount this device may be obtained via Port I/O.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Device(u32);
 
 impl Device {
-    /// Create config space header address from (bus, dev, fun) triple.
+    /// Create config space header address from (bus, slot, fun) triple.
     /// The enable bit is set by default.
-    pub const fn from_bdf(bus: u8, dev: u8, fun: u8) -> Self {
+    pub const fn from_bsf(bus: u8, slot: u8, fun: u8) -> Self {
         //   1u32         << 31     // enable bit
         // | (bus as u32) << 16     // bus no(8bit)
-        // | (dev as u32) << 11     // dev no(5bit)
+        // | (slot as u32) << 11    // slot no(5bit)
         // | (fun as u32) <<  8     // fun no(3bit)
         // | (offset & 0xfc) as u32;// offset(8bit), round off last 2bit
         Self(
-            // u32::from_le_bytes([0, (dev << 3) | fun, bus, 0x80])
-            1u32           << 31     // enable bit
-            | (bus as u32) << 16     // bus no(8bit)
-            | (dev as u32) << 11     // dev no(5bit)
-            | (fun as u32) <<  8     // fun no(3bit)
+            // u32::from_le_bytes([0, (slot << 3) | fun, bus, 0x80])
+            1u32            << 31     // enable bit
+            | (bus as u32)  << 16     // bus no(8bit)
+            | (slot as u32) << 11     // slot no(5bit)
+            | (fun as u32)  <<  8     // fun no(3bit)
         )
     }
 
@@ -33,11 +76,11 @@ impl Device {
         u32::to_le_bytes(self.0)[2]
     }
 
-    /// returns `(dev, fun)` pair of this configuration.
-    pub const fn dev_fun(&self) -> (u8, u8) {
-        // let dev_fun = ((self.0 & 0xff00) >> 16) as u8;
-        let dev_fun = u32::to_le_bytes(self.0)[1];
-        ((dev_fun & 0xf8) >> 3, dev_fun & 0x07)
+    /// returns `(slot, fun)` pair of this configuration.
+    pub const fn slot_fun(&self) -> (u8, u8) {
+        // let slot_fun = ((self.0 & 0xff00) >> 16) as u8;
+        let slot_fun = u32::to_le_bytes(self.0)[1];
+        ((slot_fun & 0xf8) >> 3, slot_fun & 0x07)
     }
 
     /// Read 4 bytes from the address plus offset specified.
@@ -70,11 +113,11 @@ impl Device {
         (self.read_offset(0x00) >> 16) as u16
     }
 
-    /// read class code and revision(1st byte) of this device.
+    /// read class code of this device.
     #[inline]
-    pub fn class_code_rev(&self) -> u32 {
-        // offset 0x08 byte, size 4 bytes
-        self.read_offset(0x08)
+    pub fn class_code(&self) -> ClassCode {
+        // offset 0x09 byte, size 3 bytes
+        ClassCode::from(self.read_offset(0x08) >> 8)
     }
 
     /// read header type of this device.
@@ -92,11 +135,12 @@ impl Device {
         (self.header_type() & 0x80) == 0
     }
 
-    /// read bus num for this device.
+    /// read BAR(Base Address Register)
+    /// `.bar(2)` : bus_num
     #[inline]
-    pub fn bus_num(&self) -> u32 {
-        // offset 0x18 byte, size 4 bytes (BAR = Base Address Register)
-        self.read_offset(0x18)
+    pub fn bar(&self, no: u8) -> u32 {
+        // assert!(no <= 5);
+        self.read_offset(0x10 + 4 * no)
     }
 
 }
@@ -113,7 +157,7 @@ pub type Result = core::result::Result<(), Error>;
 
 const DEVICE_CAP: usize = 32;
 
-/// array of found devices which can hold up to 32 devices.
+/// array of found devices which can hold up to `DEVICE_CAP` devices.
 pub struct Devices {
     store: [Device; DEVICE_CAP],
     count: usize,
@@ -133,70 +177,92 @@ impl Devices {
         } else { None }
     }
 
+    #[allow(dead_code)]
+    fn scan_all_brute(&mut self) -> Result {
+        for bus in 0..=0xffu8 {
+            for slot in 0..=31u8 {
+                for fun in 0..=7u8 {
+                    let dev = Device::from_bsf(bus, slot, fun);
+                    if dev.is_invalid() {
+                        continue;
+                    }
+
+                    // add dev
+                    self.add_dev(dev)?;
+
+                    if fun == 0 && dev.is_single_fun() {
+                        break;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
     fn scan_all(&mut self) -> Result {
+        // this method uses DFS (with PCI-to-PCI bridges as edges) to scan next devices
+        // alternatively, we can just iterate through all 65536 combinations
+        // via `self.scan_all_brute()`
+
         // start from bus 0.
-        if Device::from_bdf(0, 0, 0).is_single_fun() {
+        if Device::from_bsf(0, 0, 0).is_single_fun() {
             return self.scan_bus(0);
         }
         for fun in 0..8u8 { // 1..8u8 is said to be buggy
+            // this is the only line accepting "check before visit" policy.
+            // on other scenes, DFS is implemented with "check when visit".
+            if Device::from_bsf(0, 0, fun).is_invalid() { continue; }
             self.scan_bus(fun)?; // fun as initial bus
         }
         Ok(())
     }
 
     fn scan_bus(&mut self, bus: u8) -> Result {
-        if bus < 8 && Device::from_bdf(0, 0, bus).is_invalid() {
-            return Ok(());
-        }
-
-        for dev in 0..32u8 {
-            self.scan_dev(bus, dev)?;
+        for slot in 0..32u8 {
+            self.scan_slot(bus, slot)?;
         }
         Ok(())
     }
 
-    fn scan_dev(&mut self, bus: u8, dev: u8) -> Result {
-        let entry_device = Device::from_bdf(bus, dev, 0);
-        if entry_device.is_invalid() {
+    fn scan_slot(&mut self, bus: u8, slot: u8) -> Result {
+        let entry_dev = Device::from_bsf(bus, slot, 0);
+        if entry_dev.is_invalid() {
             return Ok(());
         }
-        if entry_device.is_single_fun() {
-            return self.scan_fun(bus, dev, 0);
+        if entry_dev.is_single_fun() {
+            return self.scan_fun(bus, slot, 0);
         }
 
         for fun in 0..8u8 {
-            self.scan_fun(bus, dev, fun)?;
+            self.scan_fun(bus, slot, fun)?;
         }
         Ok(())
     }
 
-    fn scan_fun(&mut self, bus: u8, dev: u8, fun: u8) -> Result {
-        let device = Device::from_bdf(bus, dev, fun);
-        if device.is_invalid() {
+    fn scan_fun(&mut self, bus: u8, slot: u8, fun: u8) -> Result {
+        let dev = Device::from_bsf(bus, slot, fun);
+        if dev.is_invalid() {
             return Ok(());
         }
 
         // add dev
-        self.add_dev(device)?;
+        self.add_dev(dev)?;
 
-        // check if there are more buses to scan (DFS)
-        let class_code_rev = device.class_code_rev();
-        let base = ((class_code_rev >> 24) & 0xff) as u8;
-        let sub = ((class_code_rev >> 16) & 0xff) as u8;
-
-        if base == 0x06 && sub == 0x04 {
-            let bus_num = device.bus_num();
-            let next_bus = ((bus_num >> 8) & 0xff) as u8;
-            return self.scan_bus(next_bus);
+        // scan for PCI-to-PCI bridges
+        // if there is any, more buses should be scanned (DFS)
+        if dev.class_code().match_base_sub(0x06, 0x04) {
+            // let bus_num = dev.bar(2);
+            let secondary_bus = ((dev.bar(2) >> 8) & 0xff) as u8;
+            return self.scan_bus(secondary_bus);
         }
         Ok(())
     }
 
-    fn add_dev(&mut self, device: Device) -> Result {
+    fn add_dev(&mut self, dev: Device) -> Result {
         if self.count == DEVICE_CAP {
             return Err(Error::Full);
         }
-        self.store[self.count] = device;
+        self.store[self.count] = dev;
         self.count += 1;
 
         Ok(())
