@@ -1,4 +1,4 @@
-use x86_64::instructions::port::Port;
+use x86_64::{instructions::port::Port, PhysAddr};
 
 /// PCI class code (base, sub, interface)
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -41,6 +41,14 @@ impl From<u32> for ClassCode {
     fn from(code: u32) -> Self {
         Self(code & 0xffffff)
     }
+}
+
+
+#[derive(Clone, Debug, Copy, PartialEq)]
+pub enum Bar {
+    None,
+    IO(u32),
+    MM(PhysAddr),
 }
 
 const CFG_ADDR_PORT_NO: u16 = 0x0cf8;
@@ -125,8 +133,6 @@ impl Device {
     pub fn header_type(&self) -> u8 {
         // offset 0x0e byte, size 1 byte
         ((self.read_offset(0x0c) >> 16) & 0xff) as u8
-
-        // @todo : header type might be used repeatedly. Store in its own field?
     }
 
     /// whether this device is single-functioned
@@ -136,11 +142,34 @@ impl Device {
     }
 
     /// read BAR(Base Address Register)
-    /// `.bar(2)` : bus_num
+    /// currently this is only intended to read BAR0.
     #[inline]
-    pub fn bar(&self, no: u8) -> u32 {
-        // assert!(no <= 5);
-        self.read_offset(0x10 + 4 * no)
+    pub fn bar0(&self /*, idx: u8 */) -> Bar {
+        // BAR bits
+        // bit 0: region(0: MM, 1: IO)
+        // bit 1~2: bit mode(00: 32bit, 10: 64bit etc.)
+        // bit 3: prefetchable(0: no, 1: yes)
+        // bit 4~ : actual physical address, 16-byte aligned
+
+        /* let idx = idx.clamp(0, 5); */
+        let raw0 = self.read_offset(0x10 /* + 4 * idx */);
+
+        if raw0 & 1 != 0 {
+            return Bar::IO(raw0 ^ (raw0 & 0x3));
+        }
+
+        let bit_64 = raw0 & 0x6 != 0x6;
+        let raw1 = if bit_64 /* && idx < 5 */ {
+            self.read_offset(0x10 + 4 /* * (idx + 1) */)
+        } else { 0 };
+        let raw = ((raw1 as u64) << 32) | (raw0 as u64);
+
+        let addr = raw ^ (raw & 0xf);
+        if addr == 0 {
+            Bar::None
+        } else {
+            Bar::MM(PhysAddr::new(addr))
+        }
     }
 
 }
@@ -251,8 +280,11 @@ impl Devices {
         // scan for PCI-to-PCI bridges
         // if there is any, more buses should be scanned (DFS)
         if dev.class_code().match_base_sub(0x06, 0x04) {
-            // let bus_num = dev.bar(2);
-            let secondary_bus = ((dev.bar(2) >> 8) & 0xff) as u8;
+            // `bus_num` reads BAR2.
+            // in PCI-to-PCI bridges, BAR2 is used to represent bus_num?
+
+            // let bus_num = dev.read_offset(0x18);
+            let secondary_bus = ((dev.read_offset(0x18) >> 8) & 0xff) as u8;
             return self.scan_bus(secondary_bus);
         }
         Ok(())

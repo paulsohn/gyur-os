@@ -33,7 +33,7 @@ pub extern "sysv64" fn _start (
 
     console_println!("Hello, GYUR OS!");
 
-    use kernel::pci::{ Devices, Device };
+    use kernel::pci::{ Devices, Device, Bar };
     let devices = Devices::scan().unwrap();
     for dev in devices.as_slice() {
         console_println!("{}.{}.{}.: vend {:04x}, class {:06x}, head {:02x}", dev.bus(), dev.slot_fun().0, dev.slot_fun().1, dev.vendor_id(), dev.class_code().code(), dev.header_type());
@@ -44,6 +44,11 @@ pub extern "sysv64" fn _start (
     });
     if let Some(dev) = xhc_dev {
         console_println!("xHC has been found: {}.{}.{}.", dev.bus(), dev.slot_fun().0, dev.slot_fun().1);
+
+        let bar0 = dev.bar0();
+        if let Bar::MM(addr) = bar0 {
+            console_println!("BAR xHC MMIO base: {:08x}", addr.as_u64());
+        }
     }
 
     // for i in 0..20 {
