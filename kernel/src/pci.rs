@@ -1,4 +1,11 @@
-use x86_64::{instructions::port::Port, PhysAddr};
+// @TODO: replace this module with `pci_types` (when the crate is more ready)
+
+use crate::{Error, Result};
+
+use x86_64::instructions::port::Port;
+// use packed_struct::prelude::*; // @TODO : convert ClassCode into packed struct
+
+use bit_field::BitField;
 
 /// PCI class code (base, sub, interface)
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -43,12 +50,12 @@ impl From<u32> for ClassCode {
     }
 }
 
-
+/// BAR address data, with enum variants by flags
 #[derive(Clone, Debug, Copy, PartialEq)]
 pub enum Bar {
     None,
     IO(u32),
-    MM(PhysAddr),
+    MM(u64),
 }
 
 const CFG_ADDR_PORT_NO: u16 = 0x0cf8;
@@ -98,6 +105,21 @@ impl Device {
             Port::<u32>::new(CFG_ADDR_PORT_NO).write(addr);
             Port::<u32>::new(CFG_DATA_PORT_NO).read()
         }
+    }
+
+    /// Write 4 bytes into the address plus offset specified.
+    fn write_offset(&self, offset: u8, data: u32) {
+        let addr  = self.0 | ((offset & 0xfc) as u32);
+        unsafe {
+            Port::<u32>::new(CFG_ADDR_PORT_NO).write(addr);
+            Port::<u32>::new(CFG_DATA_PORT_NO).write(data);
+        }
+    }
+
+    /// read 4 bytes from `read_off` offset and write into `write_off` directly.
+    #[inline]
+    pub fn read_write_offset(&self, read_off: u8, write_off: u8) {
+        self.write_offset(write_off, self.read_offset(read_off));
     }
 
     /// Check whether this device is invalid.
@@ -168,21 +190,11 @@ impl Device {
         if addr == 0 {
             Bar::None
         } else {
-            Bar::MM(PhysAddr::new(addr))
+            Bar::MM(addr)
         }
     }
 
 }
-
-// fn is_single_fun(header_type: u8) -> bool {
-//     (header_type & 0x80) == 0
-// }
-
-pub enum Error {
-    Full,
-    Empty
-}
-pub type Result = core::result::Result<(), Error>;
 
 const DEVICE_CAP: usize = 32;
 
