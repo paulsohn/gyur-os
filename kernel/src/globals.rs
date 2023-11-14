@@ -6,7 +6,7 @@ use crate::console::Console;
 
 use core::fmt::{Arguments, Write};
 use core::cell::OnceCell;
-use spin::Mutex; // `Mutex<OnceCell<T>>` mimics std `OnceLock`.
+use spin::Mutex; // `Mutex<OnceCell<T>>` mimics std `OnceLock`. @todo use Lazy<Mutex<T>> ?
 
 pub static SCREEN: Mutex<OnceCell<Screen>> = Mutex::new(OnceCell::new());
 pub static CONSOLE: Mutex<OnceCell<Console>> = Mutex::new(OnceCell::new());

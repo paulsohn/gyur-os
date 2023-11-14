@@ -6,7 +6,7 @@ pub mod console;
 pub mod cursor;
 
 pub mod pci;
-pub mod xhci_driver;
+pub mod allocator;
 
 pub enum Error {
     Full,

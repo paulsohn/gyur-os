@@ -17,7 +17,7 @@ use kernel::{
         SYSCURSOR_SHAPE
     },
 
-    xhci_driver::Controller,
+    // usb::usb_xhci::controller::Controller,
 
     globals,
     console_print,
@@ -61,10 +61,8 @@ pub extern "sysv64" fn _start (
         if let Bar::MM(mmio_base) = xdev.bar0() {
             console_println!("BAR xHC MMIO base: {:08x}", mmio_base);
 
-            
-
-            let mut xhc = Controller::new(mmio_base);
-            xhc.run();
+            // let mut xhc = Controller::new(mmio_base);
+            // xhc.run();
 
         }
     }

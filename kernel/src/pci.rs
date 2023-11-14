@@ -5,8 +5,6 @@ use crate::{Error, Result};
 use x86_64::instructions::port::Port;
 // use packed_struct::prelude::*; // @TODO : convert ClassCode into packed struct
 
-use bit_field::BitField;
-
 /// PCI class code (base, sub, interface)
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ClassCode(u32);
