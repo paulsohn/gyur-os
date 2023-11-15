@@ -24,6 +24,33 @@ use kernel::{
     console_println
 };
 
+use kernel::allocator::Bump;
+use usb_xhci::controller::Controller;
+use usb_xhci::class::{
+    KeyboardReport,
+    MouseReport,
+    SupportedClassListeners
+};
+
+
+fn keyboard_listener(report: KeyboardReport) {
+    console_println!("Keyboard Report) modifier : {}", report.modifier);
+}
+
+fn mouse_listener(report: MouseReport) {
+    console_println!("Mouse Report) {}, {}, {}", report.buttons, report.x, report.y);
+}
+
+struct Listeners;
+impl SupportedClassListeners for Listeners {
+    fn keyboard() -> &'static fn(KeyboardReport) {
+        &keyboard_listener
+    }
+    fn mouse() -> &'static fn(MouseReport) {
+        &mouse_listener
+    }
+}
+
 #[no_mangle]
 pub extern "sysv64" fn _start (
     frame_buffer_info: FrameBuffer
@@ -34,6 +61,25 @@ pub extern "sysv64" fn _start (
     );
 
     console_println!("Hello, GYUR OS!");
+
+    {
+        let mut screen_cell = globals::SCREEN.lock();
+        let screen = screen_cell.get_mut().unwrap();
+
+        let x = 200usize;
+        let y = 100usize;
+
+        for xx in x..(x+SYSCURSOR_WIDTH).min(screen.resolution().0) {
+            for yy in y..(y+SYSCURSOR_HEIGHT).min(screen.resolution().1) {
+                let ch = match SYSCURSOR_SHAPE[yy-y][xx-x] {
+                    b'@' => ColorCode::BLACK,
+                    b'.' => ColorCode::WHITE,
+                    _ => continue, // transparent
+                };
+                screen.render_pixel((xx, yy), ch);
+            }
+        }
+    }
 
     use kernel::pci::{ Devices, Device, Bar };
     let devices = Devices::scan().unwrap();
@@ -63,26 +109,12 @@ pub extern "sysv64" fn _start (
 
             // let mut xhc = Controller::new(mmio_base);
             // xhc.run();
+            
+            let mut xhc: Controller<_, Listeners> = Controller::new(mmio_base, Bump::new());
+            xhc.run();
 
-        }
-    }
-
-
-    {
-        let mut screen_lock = globals::SCREEN.lock();
-        let screen = screen_lock.get_mut().unwrap();
-
-        let x = 200usize;
-        let y = 100usize;
-
-        for xx in x..(x+SYSCURSOR_WIDTH).min(screen.resolution().0) {
-            for yy in y..(y+SYSCURSOR_HEIGHT).min(screen.resolution().1) {
-                let ch = match SYSCURSOR_SHAPE[yy-y][xx-x] {
-                    b'@' => ColorCode::BLACK,
-                    b'.' => ColorCode::WHITE,
-                    _ => continue, // transparent
-                };
-                screen.render_pixel((xx, yy), ch);
+            loop {
+                xhc.process_events();
             }
         }
     }

@@ -29,7 +29,7 @@ pub struct Console {
 
 impl Console{
     pub fn new(screen: &'static Mutex<OnceCell<Screen>>) -> Self {
-        let mut console = Self {
+        let console = Self {
             screen,
             fg: ColorCode::WHITE,
             bg: ColorCode::GRAY,
@@ -50,13 +50,13 @@ impl Console{
     }
 
     /// refresh the screen by rendering chars in buffer.
-    fn render(&mut self){
+    fn render(&self){
         // to prevent E0716 (temporary value dropped while borrowed)
         // we should acquire the lock each time and save into a variable
         // to guarantee the lock is freed after we've finished using the underlying data
 
-        let mut screen_lock = self.screen.lock();
-        let screen = screen_lock.get_mut().unwrap();
+        let mut screen_cell = self.screen.lock();
+        let screen = screen_cell.get_mut().unwrap();
 
         for i in 0..CONSOLE_ROWS {
             for j in 0..CONSOLE_COLS {
@@ -66,9 +66,9 @@ impl Console{
     }
 
     /// refresh certain coordinate with given character.
-    fn render_one(&mut self, (i, j): (usize, usize), ch: u8){
-        let mut screen_lock = self.screen.lock();
-        let screen = screen_lock.get_mut().unwrap();
+    fn render_one(&self, (i, j): (usize, usize), ch: u8){
+        let mut screen_cell = self.screen.lock();
+        let screen = screen_cell.get_mut().unwrap();
 
         screen.render_ascii(self.screen_coord((i,j)), ch, self.fg, Some(self.bg));
     }

@@ -617,7 +617,7 @@ where
     A: Allocator + Clone + 'static,
     L: SupportedClassListeners,
 {
-    pub fn on_port_status_change(&mut self, port_id: usize) {
+    fn on_port_status_change(&mut self, port_id: usize) {
         match self.port_cfg_phase[port_id] {
             PortConfigPhase::NotConnected => self.reset_port(port_id),
             PortConfigPhase::ResettingPort => self.enable_slot(port_id),
@@ -625,7 +625,7 @@ where
         };
     }
 
-    pub fn on_transfer(&mut self, te: trb::event::TransferEvent) {
+    fn on_transfer(&mut self, te: trb::event::TransferEvent) {
         let slot_id = te.slot_id() as usize;
 
         let entry = self.bus_mgr.entry_at(slot_id).unwrap();
@@ -734,7 +734,7 @@ where
         }
     }
 
-    pub fn on_cmd_complete(&mut self, cc: trb::event::CommandCompletion) {
+    fn on_cmd_complete(&mut self, cc: trb::event::CommandCompletion) {
         let slot_id = cc.slot_id() as usize;
         let issuer = unsafe {
             (cc.command_trb_pointer() as usize as *const Block).read()

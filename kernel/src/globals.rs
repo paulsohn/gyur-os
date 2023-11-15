@@ -6,14 +6,17 @@ use crate::console::Console;
 
 use core::fmt::{Arguments, Write};
 use core::cell::OnceCell;
-use spin::Mutex; // `Mutex<OnceCell<T>>` mimics std `OnceLock`. @todo use Lazy<Mutex<T>> ?
+use spin::Mutex; // `Mutex<OnceCell<T>>` mimics std `OnceLock`.
 
 pub static SCREEN: Mutex<OnceCell<Screen>> = Mutex::new(OnceCell::new());
 pub static CONSOLE: Mutex<OnceCell<Console>> = Mutex::new(OnceCell::new());
 
+/// Initialize global variables.
 pub fn init(
     frame_buffer: FrameBuffer
 ){
+    // we need dynamic parameters for initialization, so we can't use `LazyCell` (or `LazyLock`)
+
     SCREEN.lock().get_or_init(|| {
         Screen::from(frame_buffer)
     });

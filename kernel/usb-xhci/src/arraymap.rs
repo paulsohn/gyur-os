@@ -17,29 +17,33 @@ where
         }
     }
 
-    pub fn get(&self, k: K) -> Option<V> {
+    pub fn get(&self, k: &K) -> Option<V> {
         self.arr.iter().find_map(|ent| {
             ent.map(|(key, value)| {
-                if k == key { Some(value) } else { None }
+                if *k == key { Some(value) } else { None }
             }).flatten()
         })
     }
 
-    pub fn set(&mut self, k: K, v: V) -> bool {
+    pub fn set(&mut self, k: &K, v: V) -> bool {
         self.arr.iter_mut().find_map(|ent| {
-            if ent.is_none() {
-                *ent = Some((k, v));
-                Some(())
+            if let Some((key, _)) = *ent {
+                if *k == key {
+                    *ent = Some((*k, v));
+                    return Some(());
+                }
             } else {
-                None
+                *ent = Some((*k, v));
+                return Some(());
             }
+            None
         }).is_some()
     }
 
-    pub fn delete(&mut self, k: K) -> bool {
+    pub fn delete(&mut self, k: &K) -> bool {
         self.arr.iter_mut().find_map(|ent| {
             if let Some((key, _)) = *ent {
-                if k == key {
+                if *k == key {
                     *ent = None;
                     return Some(());
                 }

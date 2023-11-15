@@ -285,7 +285,7 @@ where
                 let status_trb = trb::transfer::StatusStage::new();
                 let _status_pos = tr.push(block!(status_trb));
 
-                self.setup_stage_map.borrow_mut().set(data_pos, setup_pos);
+                self.setup_stage_map.borrow_mut().set(&data_pos, setup_pos);
             } else {
                 let setup_trb = *req.into_setup_stage_trb()
                     .set_transfer_type(trb::transfer::TransferType::No);
@@ -296,7 +296,7 @@ where
                     .set_interrupt_on_completion();
                 let status_pos = tr.push(block!(status_trb));
 
-                self.setup_stage_map.borrow_mut().set(status_pos, setup_pos);
+                self.setup_stage_map.borrow_mut().set(&status_pos, setup_pos);
             }
         });
     }
@@ -320,7 +320,7 @@ where
                     .set_direction();
                 let _status_pos = tr.push(block!(status_trb));
 
-                self.setup_stage_map.borrow_mut().set(data_pos, setup_pos);
+                self.setup_stage_map.borrow_mut().set(&data_pos, setup_pos);
             } else {
                 let setup_trb = *req.into_setup_stage_trb()
                     .set_transfer_type(trb::transfer::TransferType::No);
@@ -331,7 +331,7 @@ where
                     .set_interrupt_on_completion();
                 let status_pos = tr.push(block!(status_trb));
 
-                self.setup_stage_map.borrow_mut().set(status_pos, setup_pos);
+                self.setup_stage_map.borrow_mut().set(&status_pos, setup_pos);
             }
         });
     }

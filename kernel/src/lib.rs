@@ -1,4 +1,7 @@
 #![no_std]
+#![feature(allocator_api)]
+// #![feature(maybe_uninit_uninit_array)]
+// #![feature(const_maybe_uninit_uninit_array)]
 
 mod sysfont;
 pub mod screen;
