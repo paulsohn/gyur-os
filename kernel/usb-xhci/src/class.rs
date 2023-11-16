@@ -2,6 +2,7 @@ extern crate alloc;
 
 use core::alloc::Allocator;
 use core::marker::PhantomData;
+// use alloc::alloc::Global;
 use alloc::boxed::Box;
 
 use bitvec::prelude::*;
@@ -227,7 +228,7 @@ pub trait SupportedClassListeners: 'static {
     fn mouse() -> fn(MouseReport);
 }
 
-pub fn new_class<'b, B, A, L>(
+pub fn new_class<'b, B, L, A /* = Global */>(
     base: u8, sub: u8, protocol: u8,
     if_desc: InterfaceDescriptorBody,
     allocator: A

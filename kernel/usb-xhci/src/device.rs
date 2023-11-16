@@ -3,6 +3,7 @@ extern crate alloc;
 use core::alloc::Allocator;
 use core::cell::RefCell;
 use core::marker::PhantomData;
+use alloc::alloc::Global;
 use alloc::vec::Vec;
 use alloc::boxed::Box;
 // use alloc::rc::Rc;
@@ -37,7 +38,7 @@ pub enum DeviceState {
     Suspend, // unused
 }
 
-pub struct Device<B, A, L>
+pub struct Device<B, L, A = Global>
 where
     B: USBBus,
     A: Allocator + Clone + 'static,
@@ -55,7 +56,7 @@ where
     _listeners: PhantomData<L>,
 }
 
-impl<B, A, L> Device<B, A, L>
+impl<B, L, A> Device<B, L, A>
 where
     B: USBBus,
     A: Allocator + Clone + 'static,
@@ -123,7 +124,7 @@ where
                 // read interfaces and make class drivers.
                 while let Some(desc) = reader.next() {
                     if let Descriptor::Interface(&if_desc) = desc {
-                        if let Some(cls) = new_class::<'b, B, A, L>(
+                        if let Some(cls) = new_class::<'b, B, L, A>(
                             if_desc.b_interface_class,
                             if_desc.b_interface_sub_class,
                             if_desc.b_interface_sub_class,
@@ -150,7 +151,7 @@ where
                 // use device class, subclass, protocol to make class driver.
                 while let Some(desc) = reader.next() {
                     if let Descriptor::Interface(&if_desc) = desc {
-                        if let Some(cls) = new_class::<'b, B, A, L>(
+                        if let Some(cls) = new_class::<'b, B, L, A>(
                             self.desc.b_device_class,
                             self.desc.b_device_sub_class,
                             self.desc.b_device_sub_class,

@@ -3,6 +3,7 @@ extern crate alloc;
 use core::alloc::Allocator;
 use core::cell::RefCell;
 use core::marker::PhantomData;
+use alloc::alloc::Global;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 
@@ -36,25 +37,25 @@ macro_rules! block {
 
 pub const MAX_DEVICE_SLOTS: usize = 8;
 
-pub struct DeviceEntry<B, A, L>
+pub struct DeviceEntry<B, L, A = Global>
 where
     B: USBBus,
     A: Allocator + Clone + 'static,
     L: SupportedClassListeners,
 {
-    pub(crate) device: RefCell<Device<B, A, L>>,
+    pub(crate) device: RefCell<Device<B, L, A>>,
     pub(crate) bus: B,    
     pub(crate) class_drivers: RefCell<Vec<Box<dyn USBClass<B>, A>, A>>,
     pub(crate) ep_configs: RefCell<Vec<EndpointConfig, A>>,
 }
-pub type XHCIDeviceEntry<A, L> = DeviceEntry<XHCIBus<A, L>, A, L>;
+pub type XHCIDeviceEntry<L, A = Global> = DeviceEntry<XHCIBus<L, A>, L, A>;
 
-impl<A, L> XHCIDeviceEntry<A, L>
+impl<L, A> XHCIDeviceEntry<L, A>
 where
     A: Allocator + Clone + 'static,
     L: SupportedClassListeners,
 {
-    // type B = XHCIBus<A, L>;
+    // type B = XHCIBus<L, A>;
 
     pub fn new(
         db: single::ReadWrite<Doorbell, Identity>, 
@@ -71,12 +72,12 @@ where
 }
 
 
-pub struct XHCIDeviceManager<A, L>
+pub struct XHCIDeviceManager<L, A = Global>
 where
     A: Allocator + Clone + 'static,
     L: SupportedClassListeners,
 {
-    entries: [Option<Box<XHCIDeviceEntry<A, L>, A>>; MAX_DEVICE_SLOTS + 1],
+    entries: [Option<Box<XHCIDeviceEntry<L, A>, A>>; MAX_DEVICE_SLOTS + 1],
 
     /// Context Pointers, which can be referenced with `.dcbaa()` method.
     /// 
@@ -87,7 +88,7 @@ where
     allocator: A,
 }
 
-impl<A, L> XHCIDeviceManager<A, L>
+impl<L, A> XHCIDeviceManager<L, A>
 where
     A: Allocator + Clone + 'static,
     L: SupportedClassListeners,
@@ -101,7 +102,7 @@ where
         }
     }
 
-    pub fn alloc_entry(&mut self, slot_id: usize, use_64byte: bool, db: single::ReadWrite<Doorbell, Identity>) -> &Box<XHCIDeviceEntry<A, L>, A> {
+    pub fn alloc_entry(&mut self, slot_id: usize, use_64byte: bool, db: single::ReadWrite<Doorbell, Identity>) -> &Box<XHCIDeviceEntry<L, A>, A> {
         assert!(slot_id <= MAX_DEVICE_SLOTS);
 
         if self.entries[slot_id].is_some() {
@@ -132,7 +133,7 @@ where
             core::mem::transmute(sp_ptr); // unsafe
     }
 
-    pub fn entry_at(&self, slot_id: usize) -> Option<&Box<XHCIDeviceEntry<A, L>, A>> {
+    pub fn entry_at(&self, slot_id: usize) -> Option<&Box<XHCIDeviceEntry<L, A>, A>> {
         self.entries[slot_id].as_ref()
     }
 }
@@ -151,14 +152,14 @@ enum PortConfigPhase {
 }
 
 /// A xCHI controller.
-pub struct Controller<A, L>
+pub struct Controller<L, A = Global>
 where
     A: Allocator + Clone + 'static,
     L: SupportedClassListeners,
 {
     regs: Registers<Identity>,
 
-    bus_mgr: XHCIDeviceManager<A, L>,
+    bus_mgr: XHCIDeviceManager<L, A>,
     cmd_ring: ring::buf::CommandRing<A>,
     ev_ring: ring::buf::EventRing<A, Identity>,
 
@@ -172,7 +173,7 @@ where
     // allocator: A,
 }
 
-impl<A, L> Controller<A, L>
+impl<L, A> Controller<L, A>
 where
     A: Allocator + Clone + 'static,
     L: SupportedClassListeners,
@@ -395,7 +396,7 @@ where
 }
 
 // Port basic functions.
-impl<A, L> Controller<A, L>
+impl<L, A> Controller<L, A>
 where
     A: Allocator + Clone + 'static,
     L: SupportedClassListeners,
@@ -476,7 +477,7 @@ where
 }
 
 // Basic Command ring and Port configuration functions.
-impl<A, L> Controller<A, L>
+impl<L, A> Controller<L, A>
 where
     A: Allocator + Clone + 'static,
     L: SupportedClassListeners,
@@ -612,7 +613,7 @@ where
 }
 
 // Event handler functions.
-impl<A, L> Controller<A, L>
+impl<L, A> Controller<L, A>
 where
     A: Allocator + Clone + 'static,
     L: SupportedClassListeners,

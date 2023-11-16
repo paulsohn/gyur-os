@@ -4,6 +4,7 @@ use core::alloc::Allocator;
 use core::cell::RefCell;
 // use spin::Mutex; // in multi-threaded case, `spin::RwLock` should be used instead of `RefCell`.
 use core::marker::PhantomData;
+use alloc::alloc::Global;
 
 use crate::endpoint::EndpointAddress;
 use crate::setup::SetupRequest;
@@ -50,7 +51,7 @@ pub enum Context<T32, T64> {
 //     SlotAssigning,
 //     SlotAssigned,
 // }
-pub struct XHCIBus<A, L>
+pub struct XHCIBus<L, A = Global>
 where
     A: Allocator + Clone + 'static,
     L: SupportedClassListeners,
@@ -76,7 +77,7 @@ where
     _listeners: PhantomData<L>,
 }
 
-impl<A, L> XHCIBus<A, L>
+impl<L, A> XHCIBus<L, A>
 where
     A: Allocator + Clone + 'static,
     L: SupportedClassListeners,
@@ -262,7 +263,7 @@ where
 
 }
 
-impl<A, L> USBBus for XHCIBus<A, L>
+impl<L, A> USBBus for XHCIBus<L, A>
 where
     A: Allocator + Clone + 'static,
     L: SupportedClassListeners,

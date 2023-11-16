@@ -1,8 +1,8 @@
 extern crate alloc;
 
-use core::ptr::NonNull;
+// use core::ptr::NonNull;
 use core::alloc::{GlobalAlloc, Layout};
-use alloc::alloc::{Allocator, AllocError};
+// use alloc::alloc::{Allocator, AllocError};
 
 use spin::mutex::Mutex;
 
@@ -36,13 +36,13 @@ impl<const N: usize> BumpArena<N> {
         (value + alignment - 1) & !(alignment - 1)
     }
 
-    unsafe fn alloc_mem(&self, size: usize, alignment: usize) -> *mut u8 {
+    unsafe fn alloc_mem(&self, layout: Layout) -> *mut u8 {
         let mut offset = self.offset.lock();
 
         (0..N).find_map(|i| {
-            let result_offset = Self::round_up_to(offset[i], alignment);
+            let result_offset = Self::round_up_to(offset[i], layout.align());
 
-            let next_offset = result_offset + size;
+            let next_offset = result_offset + layout.size();
             if next_offset < PAGE_BYTES {
                 None
             } else {
@@ -52,15 +52,6 @@ impl<const N: usize> BumpArena<N> {
                     as *const u8 as *mut u8;
                 
                 Some(base.byte_add(result_offset))
-
-                // let result = unsafe {
-                //     core::slice::from_raw_parts_mut(
-                //         base.byte_add(result_offset),
-                //         size
-                //     )
-                // };
-
-                // NonNull::new(result)
             }
         }).unwrap_or(core::ptr::null_mut())
     }
@@ -68,10 +59,7 @@ impl<const N: usize> BumpArena<N> {
 
 unsafe impl<const N: usize> GlobalAlloc for BumpArena<N> {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        let size = layout.size();
-        let alignment = layout.align();
-
-        self.alloc_mem(size, alignment)
+        self.alloc_mem(layout)
     }
 
     unsafe fn dealloc(&self, _ptr: *mut u8, _layout: Layout) {
@@ -79,23 +67,27 @@ unsafe impl<const N: usize> GlobalAlloc for BumpArena<N> {
     }
 }
 
+// todo: can we avoid setting `global_allocator`?
+
 #[global_allocator]
 static BUMP_ARENA: BumpArena<32> = BumpArena::<32>::new();
 
-#[derive(Clone, Copy)]
-pub struct BumpStatic;
+pub type BumpGlobal = alloc::alloc::Global;
 
-unsafe impl Allocator for BumpStatic {
-    fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
-        Ok(unsafe {
-            NonNull::slice_from_raw_parts(
-                NonNull::new(BUMP_ARENA.alloc(layout)).ok_or(AllocError)?,
-                layout.size()
-            )
-        })
-    }
+// #[derive(Clone, Copy)]
+// pub struct BumpGlobal;
 
-    unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) {
-        BUMP_ARENA.dealloc(ptr.as_ptr(), layout);
-    }
-}
+// unsafe impl Allocator for BumpGlobal {
+//     fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
+//         Ok(unsafe {
+//             NonNull::slice_from_raw_parts(
+//                 NonNull::new(BUMP_ARENA.alloc(layout)).ok_or(AllocError)?,
+//                 layout.size()
+//             )
+//         })
+//     }
+
+//     unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) {
+//         BUMP_ARENA.dealloc(ptr.as_ptr(), layout);
+//     }
+// }

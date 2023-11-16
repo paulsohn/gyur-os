@@ -22,7 +22,7 @@ use kernel::{
     console_println
 };
 
-use kernel::allocator::BumpStatic;
+use kernel::allocator::BumpGlobal;
 use usb_xhci::controller::Controller;
 use usb_xhci::class::{
     KeyboardReport,
@@ -110,7 +110,7 @@ pub extern "sysv64" fn _start (
         // let mut xhc = Controller::new(mmio_base);
         // xhc.run();
         
-        let mut xhc: Controller<_, Listeners> = Controller::new(mmio_base, BumpStatic);
+        let mut xhc: Controller<_, Listeners> = Controller::new(mmio_base, BumpGlobal);
         xhc.run();
 
         loop {
