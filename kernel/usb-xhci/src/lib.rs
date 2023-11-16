@@ -2,6 +2,7 @@
 #![feature(allocator_api)]
 #![feature(slice_ptr_get)]
 #![feature(box_patterns)]
+#![feature(pointer_byte_offsets)]
 // #![feature(inherent_associated_types)]
 
 pub mod arraymap;
