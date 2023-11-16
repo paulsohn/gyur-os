@@ -70,11 +70,11 @@ impl<'a> Iterator for DescriptorIterator<'a> {
         if self.idx >= self.buf.len() {
             None
         } else {
-            let len = self.buf[self.idx] as usize;
-            let ty = self.buf[self.idx+1].into();
+            let (len, ty, desc_body_ptr) = unsafe {
+                let desc_base_ptr = self.buf.as_ptr().add(self.idx);
+                let header = core::mem::transmute::<_, &DescriptorHeader>(desc_base_ptr);
 
-            let desc_body_ptr = unsafe {
-                self.buf.as_ptr().add(self.idx+2)
+                (header.b_length as usize, header.b_descriptor_type.into(), desc_base_ptr.byte_add(core::mem::size_of::<DescriptorHeader>()))
             };
             self.idx += len;
 
