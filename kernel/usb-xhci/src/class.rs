@@ -43,7 +43,7 @@ where
     buf: [u8; 1024],
     prev: P::Info,
 
-    listener: &'static fn(P::Report),
+    listener: fn(P::Report),
     _marker: PhantomData<B>,
 }
 
@@ -54,7 +54,7 @@ where
 {
     pub fn new(
         if_index: u16,
-        listener: &'static fn(P::Report),
+        listener: fn(P::Report),
     ) -> Self {
         Self {
             ep_interrupt_in: EndpointAddress::from_byte(0),
@@ -223,8 +223,8 @@ impl Packet for KeyboardPacket {
 
 /// A trait for markers for listener configuration.
 pub trait SupportedClassListeners: 'static {
-    fn keyboard() -> &'static fn(KeyboardReport);
-    fn mouse() -> &'static fn(MouseReport);
+    fn keyboard() -> fn(KeyboardReport);
+    fn mouse() -> fn(MouseReport);
 }
 
 pub fn new_class<'b, B, A, L>(

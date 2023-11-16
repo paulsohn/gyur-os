@@ -55,6 +55,13 @@ pub enum Bar {
     IO(u32),
     MM(u64),
 }
+impl Bar {
+    pub fn mm(self) -> Option<u64> {
+        if let Bar::MM(mm) = self {
+            Some(mm)
+        } else { None }
+    }
+}
 
 const CFG_ADDR_PORT_NO: u16 = 0x0cf8;
 const CFG_DATA_PORT_NO: u16 = 0x0cfc;

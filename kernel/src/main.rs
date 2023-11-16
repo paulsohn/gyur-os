@@ -17,14 +17,12 @@ use kernel::{
         SYSCURSOR_SHAPE
     },
 
-    // usb::usb_xhci::controller::Controller,
-
     globals,
-    console_print,
+    // console_print,
     console_println
 };
 
-use kernel::allocator::Bump;
+use kernel::allocator::BumpStatic;
 use usb_xhci::controller::Controller;
 use usb_xhci::class::{
     KeyboardReport,
@@ -43,11 +41,11 @@ fn mouse_listener(report: MouseReport) {
 
 struct Listeners;
 impl SupportedClassListeners for Listeners {
-    fn keyboard() -> &'static fn(KeyboardReport) {
-        &keyboard_listener
+    fn keyboard() -> fn(KeyboardReport) {
+        keyboard_listener
     }
-    fn mouse() -> &'static fn(MouseReport) {
-        &mouse_listener
+    fn mouse() -> fn(MouseReport) {
+        mouse_listener
     }
 }
 
@@ -81,16 +79,15 @@ pub extern "sysv64" fn _start (
         }
     }
 
-    use kernel::pci::{ Devices, Device, Bar };
+    use kernel::pci::Devices;
     let devices = Devices::scan().unwrap();
     for dev in devices.as_slice() {
         console_println!("{}.{}.{}.: vend {:04x}, class {:06x}, head {:02x}", dev.bus(), dev.slot_fun().0, dev.slot_fun().1, dev.vendor_id(), dev.class_code().code(), dev.header_type());
     }
 
-    let xhc_dev = devices.as_slice().iter().find(|&dev| {
+    let opt_mmio_base = devices.as_slice().iter().find(|&dev| {
         dev.class_code().match_base_sub_interface(0x0c, 0x03, 0x30)
-    });
-    if let Some(xdev) = xhc_dev {
+    }).and_then(|xdev| {
         console_println!("xHC has been found: {}.{}.{}.", xdev.bus(), xdev.slot_fun().0, xdev.slot_fun().1);
 
         let switch_ehci_to_xhci = (xdev.vendor_id() == 0x8086)
@@ -104,18 +101,20 @@ pub extern "sysv64" fn _start (
             console_println!("Switched eHCi to xHCi");
         }
 
-        if let Bar::MM(mmio_base) = xdev.bar0() {
-            console_println!("BAR xHC MMIO base: {:08x}", mmio_base);
+        xdev.bar0().mm()
+    });
 
-            // let mut xhc = Controller::new(mmio_base);
-            // xhc.run();
-            
-            let mut xhc: Controller<_, Listeners> = Controller::new(mmio_base, Bump::new());
-            xhc.run();
+    if let Some(mmio_base) = opt_mmio_base {
+        console_println!("BAR xHC MMIO base: {:08x}", mmio_base);
 
-            loop {
-                xhc.process_events();
-            }
+        // let mut xhc = Controller::new(mmio_base);
+        // xhc.run();
+        
+        let mut xhc: Controller<_, Listeners> = Controller::new(mmio_base, BumpStatic);
+        xhc.run();
+
+        loop {
+            xhc.process_events();
         }
     }
 

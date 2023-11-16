@@ -1,7 +1,7 @@
 extern crate alloc;
 
 use core::ptr::NonNull;
-use core::alloc::Layout;
+use core::alloc::{GlobalAlloc, Layout};
 use alloc::alloc::{Allocator, AllocError};
 
 use spin::mutex::Mutex;
@@ -36,7 +36,7 @@ impl<const N: usize> BumpArena<N> {
         (value + alignment - 1) & !(alignment - 1)
     }
 
-    fn alloc_mem(&self, size: usize, alignment: usize) -> Option<NonNull<[u8]>> {
+    unsafe fn alloc_mem(&self, size: usize, alignment: usize) -> *mut u8 {
         let mut offset = self.offset.lock();
 
         (0..N).find_map(|i| {
@@ -50,43 +50,52 @@ impl<const N: usize> BumpArena<N> {
                 let base = &self.arena[i]
                     as *const _
                     as *const u8 as *mut u8;
-                let result = unsafe {
-                    core::slice::from_raw_parts_mut(
-                        base.byte_add(result_offset),
-                        size
-                    )
-                };
+                
+                Some(base.byte_add(result_offset))
 
-                NonNull::new(result)
+                // let result = unsafe {
+                //     core::slice::from_raw_parts_mut(
+                //         base.byte_add(result_offset),
+                //         size
+                //     )
+                // };
+
+                // NonNull::new(result)
             }
-        })
+        }).unwrap_or(core::ptr::null_mut())
     }
 }
 
+unsafe impl<const N: usize> GlobalAlloc for BumpArena<N> {
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        let size = layout.size();
+        let alignment = layout.align();
+
+        self.alloc_mem(size, alignment)
+    }
+
+    unsafe fn dealloc(&self, _ptr: *mut u8, _layout: Layout) {
+        // Do nothing. This is bump allocator
+    }
+}
+
+#[global_allocator]
 static BUMP_ARENA: BumpArena<32> = BumpArena::<32>::new();
 
 #[derive(Clone, Copy)]
-pub struct Bump(&'static BumpArena<32>);
+pub struct BumpStatic;
 
-impl Bump {
-    pub fn new() -> Self {
-        Self(&BUMP_ARENA)
-    }
-}
-
-impl Default for Bump {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-unsafe impl Allocator for Bump {
+unsafe impl Allocator for BumpStatic {
     fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
-        self.0.alloc_mem(layout.size(), layout.align())
-            .ok_or(AllocError)
+        Ok(unsafe {
+            NonNull::slice_from_raw_parts(
+                NonNull::new(BUMP_ARENA.alloc(layout)).ok_or(AllocError)?,
+                layout.size()
+            )
+        })
     }
 
-    unsafe fn deallocate(&self, _ptr: NonNull<u8>, _layout: Layout) {
-        // Do nothing. This is bump allocator
+    unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) {
+        BUMP_ARENA.dealloc(ptr.as_ptr(), layout);
     }
 }
