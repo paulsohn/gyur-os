@@ -1,5 +1,6 @@
 #![no_std]
 #![feature(allocator_api)]
+#![feature(pointer_byte_offsets)]
 // #![feature(maybe_uninit_uninit_array)]
 // #![feature(const_maybe_uninit_uninit_array)]
 
