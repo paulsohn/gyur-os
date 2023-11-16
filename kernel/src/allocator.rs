@@ -72,7 +72,10 @@ unsafe impl<const N: usize> GlobalAlloc for BumpArena<N> {
 #[global_allocator]
 static BUMP_ARENA: BumpArena<32> = BumpArena::<32>::new();
 
-pub type BumpGlobal = alloc::alloc::Global;
+/// Create an instance of global allocator.
+pub fn global_allocator() -> alloc::alloc::Global {
+    alloc::alloc::Global
+}
 
 // #[derive(Clone, Copy)]
 // pub struct BumpGlobal;

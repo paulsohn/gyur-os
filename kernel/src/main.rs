@@ -17,12 +17,13 @@ use kernel::{
         SYSCURSOR_SHAPE
     },
 
+    allocator::global_allocator,
+
     globals,
     // console_print,
     console_println
 };
 
-use kernel::allocator::BumpGlobal;
 use usb_xhci::controller::Controller;
 use usb_xhci::class::{
     KeyboardReport,
@@ -110,7 +111,7 @@ pub extern "sysv64" fn _start (
         // let mut xhc = Controller::new(mmio_base);
         // xhc.run();
         
-        let mut xhc: Controller<_, Listeners> = Controller::new(mmio_base, BumpGlobal);
+        let mut xhc: Controller<Listeners> = Controller::new(mmio_base, global_allocator());
         xhc.run();
 
         loop {
