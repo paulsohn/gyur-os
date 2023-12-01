@@ -46,7 +46,7 @@ where
 {
     buf: [u8; 256],
 
-    desc: DeviceDescriptorBody,
+    device_desc: DeviceDescriptorBody,
     state: DeviceState,
     // class_drivers: Vec<RefCell<Box<dyn USBClass<B>, A>>, A>,
     // ep_configs: Vec<EndpointConfig, A>,
@@ -69,7 +69,7 @@ where
 
     /// This will be set true if device desc has been received (phase 1 ended)
     fn has_device_desc_received(&self) -> bool {
-        self.desc != Default::default() // or desc should be Option<DeviceDescriptorBody>
+        self.device_desc != Default::default() // or desc should be Option<DeviceDescriptorBody>
     }
 
     /// This will be set true if the device is ready
@@ -81,7 +81,7 @@ where
         Self {
             buf: [0; 256],
 
-            desc: Default::default(),
+            device_desc: Default::default(),
             state: DeviceState::Default,
 
             // class_drivers: Vec::new_in(allocator.clone()),
@@ -96,12 +96,15 @@ where
     fn on_device_desc_received(&mut self, buf: &[u8]) { // init phase 1
         let mut reader = DescriptorIterator::from_buf(buf);
 
-        if let Some(Descriptor::Device(&desc)) = reader.next() {
-            assert_ne!(desc, Default::default(), "Received Trivial Device Descriptor"); // we want received desc to be nontrivial
-            self.desc = desc;
-        } else {
-            panic!("Not a Device Descriptor");
-        }
+        self.device_desc = match reader.next() {
+            Some(Descriptor::Device(&desc)) => {
+                assert_ne!(desc, Default::default(), "Received Trivial Device Descriptor"); // we want received desc to be nontrivial
+                desc
+            },
+            _ => {
+                panic!("Not a Device Descriptor");
+            }
+        };
     }
 
     /// Read a config descriptor and following interfaces.
@@ -115,72 +118,107 @@ where
     where
         B: 'b
     { // init phase 2
-        use crate::class::new_class;
+        use crate::class::new_class_from_interface;
 
         let mut reader = DescriptorIterator::from_buf(buf);
 
-        if let Some(Descriptor::Configuration(&cfg)) = reader.next() {
-            if self.desc.b_device_class == 0 {
-                // read interfaces and make class drivers.
-                while let Some(desc) = reader.next() {
-                    if let Descriptor::Interface(&if_desc) = desc {
-                        if let Some(cls) = new_class::<'b, B, L, A>(
-                            if_desc.b_interface_class,
-                            if_desc.b_interface_sub_class,
-                            if_desc.b_interface_sub_class,
-                            if_desc,
-                            self.allocator.clone()
-                        ) {
-                            class_drivers.borrow_mut().push(cls);
-    
-                            // read endpoints and extract configs.
-                            // in this case, some descriptors are not ep descriptors.
-                            let mut i = 0;
-                            while i < if_desc.b_num_endpoints {
-                                if let Some(Descriptor::Endpoint(&ep_desc)) = reader.next() {
-                                    ep_configs.borrow_mut().push(
-                                        EndpointConfig::from_ep_desc(ep_desc)
-                                    );
-                                    i += 1;
-                                }
-                            }
-                        }
-                    }
-                }
-            } else {
-                // use device class, subclass, protocol to make class driver.
-                while let Some(desc) = reader.next() {
-                    if let Descriptor::Interface(&if_desc) = desc {
-                        if let Some(cls) = new_class::<'b, B, L, A>(
-                            self.desc.b_device_class,
-                            self.desc.b_device_sub_class,
-                            self.desc.b_device_sub_class,
-                            if_desc,
-                            self.allocator.clone()
-                        ) {
-                            // 여기서 수명 문제가 일어남.
-                            class_drivers.borrow_mut().push(cls);
-    
-                            // read endpoints and extract configs.
-                            // in this case, ep descriptors are the first `num_endpoints` descripters read.
-                            let mut i = 0;
-                            while i < if_desc.b_num_endpoints {
-                                if let Some(Descriptor::Endpoint(&ep_desc)) = reader.next() {
-                                    ep_configs.borrow_mut().push(
-                                        EndpointConfig::from_ep_desc(ep_desc)
-                                    );
-                                }
-                                i += 1;
-                            }
-                        }
+        let cfg = match reader.next() {
+            Some(Descriptor::Configuration(&cfg)) => cfg,
+            _ => {
+                panic!("Not a configuration descriptor");
+            }
+        };
+
+        // read interfaces and make class drivers.
+        while let Some(Descriptor::Interface(&if_desc)) = reader.next() {
+            if let Some(cls) = new_class_from_interface::<'b, B, L, A>(
+                if_desc.b_interface_class,
+                if_desc.b_interface_sub_class,
+                if_desc.b_interface_protocol,
+                if_desc.b_interface_number,
+                self.allocator.clone()
+            ) {
+                class_drivers.borrow_mut().push(cls);
+
+                // read endpoints and extract configs.
+                // in this case, some descriptors are not ep descriptors.
+                let mut i = 0;
+                while i < if_desc.b_num_endpoints {
+                    if let Some(Descriptor::Endpoint(&ep_desc)) = reader.next() {
+                        ep_configs.borrow_mut().push(
+                            EndpointConfig::from_ep_desc(ep_desc)
+                        );
+                        i += 1;
                     }
                 }
             }
-
-            cfg.b_configuration_value
-        } else {
-            panic!("Not a Configuration Descriptor");
         }
+        // todo : support for device desc device class != 0 (CDC)
+
+        cfg.b_configuration_value
+
+        // if let Some(Descriptor::Configuration(&cfg)) = reader.next() {
+        //     if self.device_desc.b_device_class == 0 {
+        //         // read interfaces and make class drivers.
+        //         while let Some(desc) = reader.next() {
+        //             if let Descriptor::Interface(&if_desc) = desc {
+        //                 if let Some(cls) = new_class::<'b, B, L, A>(
+        //                     if_desc.b_interface_class,
+        //                     if_desc.b_interface_sub_class,
+        //                     if_desc.b_interface_protocol,
+        //                     if_desc,
+        //                     self.allocator.clone()
+        //                 ) {
+        //                     class_drivers.borrow_mut().push(cls);
+    
+        //                     // read endpoints and extract configs.
+        //                     // in this case, some descriptors are not ep descriptors.
+        //                     let mut i = 0;
+        //                     while i < if_desc.b_num_endpoints {
+        //                         if let Some(Descriptor::Endpoint(&ep_desc)) = reader.next() {
+        //                             ep_configs.borrow_mut().push(
+        //                                 EndpointConfig::from_ep_desc(ep_desc)
+        //                             );
+        //                             i += 1;
+        //                         }
+        //                     }
+        //                 }
+        //             }
+        //         }
+        //     } else {
+        //         // use device class, subclass, protocol to make class driver.
+        //         while let Some(desc) = reader.next() {
+        //             if let Descriptor::Interface(&if_desc) = desc {
+        //                 if let Some(cls) = new_class::<'b, B, L, A>(
+        //                     self.device_desc.b_device_class,
+        //                     self.device_desc.b_device_sub_class,
+        //                     self.device_desc.b_device_protocol,
+        //                     if_desc,
+        //                     self.allocator.clone()
+        //                 ) {
+
+        //                     class_drivers.borrow_mut().push(cls);
+    
+        //                     // read endpoints and extract configs.
+        //                     // in this case, ep descriptors are the first `num_endpoints` descripters read.
+        //                     let mut i = 0;
+        //                     while i < if_desc.b_num_endpoints {
+        //                         if let Some(Descriptor::Endpoint(&ep_desc)) = reader.next() {
+        //                             ep_configs.borrow_mut().push(
+        //                                 EndpointConfig::from_ep_desc(ep_desc)
+        //                             );
+        //                         }
+        //                         i += 1;
+        //                     }
+        //                 }
+        //             }
+        //         }
+        //     }
+
+        //     cfg.b_configuration_value
+        // } else {
+        //     panic!("Not a Configuration Descriptor");
+        // }
     }
 
     // `on_endpoints_configured`, `on_control_completed`, `on_normal_completed` :
@@ -245,7 +283,7 @@ where
 
             // This set configuration call should invoke each class drivers' set_endpoint.
 
-            // At this point, the device is considered configured.
+            // // At this point, the device is considered configured.
             // self.state = DeviceState::Configured;
             
         }

@@ -27,7 +27,7 @@ pub struct DescriptorHeader {
 pub enum DescriptorType {
     Device = 0x01,
     Configuration = 0x02,
-    Interface = 0x03,
+    Interface = 0x04,
     Endpoint = 0x05,
     HID = 0x21,
     #[num_enum(catch_all)]

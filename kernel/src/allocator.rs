@@ -20,7 +20,7 @@ impl Page {
 // bump allocator
 
 #[repr(C)]
-struct BumpArena<const N: usize> {
+struct BumpArena<const N: usize = 64> {
     arena: [Page; N],
     offset: Mutex<[usize; N]>,
 } // only `offset` is subjected to modify.
@@ -37,6 +37,9 @@ impl<const N: usize> BumpArena<N> {
     }
 
     unsafe fn alloc_mem(&self, layout: Layout) -> *mut u8 {
+        // use crate::console_println as log;
+        // log!("Allocating memory of layout {:?}", layout);
+        
         let mut offset = self.offset.lock();
 
         (0..N).find_map(|i| {
@@ -44,14 +47,14 @@ impl<const N: usize> BumpArena<N> {
 
             let next_offset = result_offset + layout.size();
             if next_offset < PAGE_BYTES {
-                None
-            } else {
                 offset[i] = next_offset;
                 let base = &self.arena[i]
                     as *const _
                     as *const u8 as *mut u8;
                 
                 Some(base.byte_add(result_offset))
+            } else {
+                None
             }
         }).unwrap_or(core::ptr::null_mut())
     }
@@ -63,14 +66,14 @@ unsafe impl<const N: usize> GlobalAlloc for BumpArena<N> {
     }
 
     unsafe fn dealloc(&self, _ptr: *mut u8, _layout: Layout) {
-        // Do nothing. This is bump allocator
+        // Do nothing. This is a bump allocator
     }
 }
 
 // todo: can we avoid setting `global_allocator`?
 
 #[global_allocator]
-static BUMP_ARENA: BumpArena<32> = BumpArena::<32>::new();
+static BUMP_ARENA: BumpArena = BumpArena::new();
 
 /// Create an instance of global allocator.
 pub fn global_allocator() -> alloc::alloc::Global {

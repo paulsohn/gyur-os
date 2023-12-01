@@ -2,6 +2,7 @@
 #![feature(allocator_api)]
 #![feature(slice_ptr_get)]
 #![feature(box_patterns)]
+#![feature(ptr_metadata)]
 #![feature(pointer_byte_offsets)]
 // #![feature(inherent_associated_types)]
 

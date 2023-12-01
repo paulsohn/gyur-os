@@ -9,7 +9,7 @@ use bitvec::prelude::*;
 
 use crate::endpoint::{EndpointAddress, EndpointConfig, EndpointDirectedType};
 use crate::setup::{/* request_code, */ requests, SetupRequest};
-use crate::descriptor::InterfaceDescriptorBody;
+// use crate::descriptor::InterfaceDescriptorBody;
 
 use crate::bus::USBBus;
 
@@ -29,6 +29,65 @@ pub trait USBClass<B: USBBus> {
 //     fn on_normal_completed(&mut self, _bus: &B, _addr: EndpointAddress, _buf: &mut [u8]) {}
 // }
 
+// pub struct USBCDCClass<B>
+// where
+//     B: USBBus,
+// {
+//     ep_interrupt_in: EndpointAddress,
+//     ep_bulk_in: EndpointAddress,
+//     ep_bulk_out: EndpointAddress,
+
+//     _bus: PhantomData<B>,
+// }
+
+// impl<B> USBCDCClass<B>
+// where
+//     B: USBBus,
+// {
+//     pub fn new() -> Self {
+//         Self {
+//             ep_interrupt_in: EndpointAddress::from_byte(0),
+//             ep_bulk_in: EndpointAddress::from_byte(0),
+//             ep_bulk_out: EndpointAddress::from_byte(0),
+//             _bus: PhantomData
+//         }
+//     }
+// }
+
+// impl<B> USBClass<B> for USBCDCClass<B>
+// where
+//     B: USBBus,
+// {
+//     fn set_endpoint(&mut self, configs: &[EndpointConfig]) {
+//         for cfg in configs.iter() {
+//             match cfg.ep_type_with_dir() {
+//                 EndpointDirectedType::InterruptIn => {
+//                     self.ep_interrupt_in = cfg.addr;
+//                 },
+//                 EndpointDirectedType::BulkIn => {
+//                     self.ep_bulk_in = cfg.addr;
+//                 },
+//                 EndpointDirectedType::BulkOut => {
+//                     self.ep_bulk_out = cfg.addr;
+//                 },
+//                 _ => {},
+//             }
+//         }
+//     }
+
+//     fn on_endpoints_configured(&mut self, _bus: &B) {
+//         // pass
+//     }
+
+//     fn on_control_completed(&mut self, _bus: &B, _addr: EndpointAddress, _req: SetupRequest, _buf: &mut [u8]) {
+//         // pass
+//     }
+
+//     fn on_normal_completed(&mut self, _bus: &B, _addr: EndpointAddress, _buf: &mut [u8]) {
+//         todo!("Send Serial, Receive Serial, Set Line Coding..");
+//     }
+// }
+
 pub struct USBHIDClass<B, P>
 where
     B: USBBus,
@@ -41,7 +100,7 @@ where
 
     last_req: SetupRequest,
 
-    buf: [u8; 1024],
+    packet: core::mem::MaybeUninit<P>,
     prev: P::Info,
 
     listener: fn(P::Report),
@@ -64,12 +123,18 @@ where
             if_index,
 
             last_req: Default::default(),
-
-            buf: [0; 1024],
+            
+            packet: core::mem::MaybeUninit::uninit(),
             prev: Default::default(),
 
             listener,
             _marker: PhantomData,
+        }
+    }
+
+    fn packet_buf(&self) -> &mut [u8] {
+        unsafe {
+            core::slice::from_raw_parts_mut(&self.packet as *const _ as *mut _, core::mem::size_of::<P>())
         }
     }
 }
@@ -99,35 +164,37 @@ where
         bus.control_out(
             EndpointAddress::control(),
             req,
-            &self.buf[0..0],
+            unsafe {
+                core::slice::from_raw_parts_mut(core::ptr::NonNull::dangling().as_ptr(), 0)
+            },
         );
 
         self.last_req = req;
     }
 
-    fn on_control_completed(&mut self, bus: &B, _addr: EndpointAddress, req: SetupRequest, buf: &mut [u8]) {
+    fn on_control_completed(&mut self, bus: &B, _addr: EndpointAddress, req: SetupRequest, _buf: &mut [u8]) {
         if self.last_req != req { return; }
         self.last_req = Default::default();
 
         bus.normal_in(
             self.ep_interrupt_in,
-            &mut buf[..P::IN_PACKET_SIZE]
+            self.packet_buf()
         );
     }
 
-    fn on_normal_completed(&mut self, bus: &B, addr: EndpointAddress, buf: &mut [u8]) {
-        if !addr.is_in() { return; }
+    fn on_normal_completed(&mut self, bus: &B, addr: EndpointAddress, _buf: &mut [u8]) {
+        if addr != self.ep_interrupt_in { return; }
+        // if !addr.is_in() { return; }
 
         // notify report to the listener.
-        let report = P::create_report_from_buf(
-            &self.buf,
-            &mut self.prev
-        );
+        let (report, info) = (unsafe { self.packet.assume_init_read() }).create_report(self.prev);
+
         (self.listener)(report);
+        self.prev = info;
 
         bus.normal_in(
             self.ep_interrupt_in,
-            &mut buf[..P::IN_PACKET_SIZE]
+            self.packet_buf()
         );
     }
 }
@@ -140,24 +207,21 @@ pub trait Packet: /* Sized + */ Clone + Copy + 'static {
     type Report: Clone + Copy + 'static;
 
     /// The context info type.
-    /// A report can be constructed from context info and received packet.
+    /// A report can be constructed from context info and received packet. After constructing a report, the context should be mutated.
     type Info: Clone + Copy + Default;
-
-    /// The size of the packet.
-    const IN_PACKET_SIZE: usize = core::mem::size_of::<Self>();
 
     /// The method to construct report and change context info.
     fn create_report(&self, prev: Self::Info) -> (Self::Report, Self::Info);
 
-    fn create_report_from_buf(buf: &[u8], prev: &mut Self::Info) -> Self::Report {
-        let packet = unsafe {
-            core::mem::transmute::<_, *const Self>(buf.as_ptr()).read()
-        };
-        let (report, info) = packet.create_report(*prev);
+    // fn create_report_from_buf(buf: &[u8], prev: &mut Self::Info) -> Self::Report {
+    //     let packet = unsafe {
+    //         core::mem::transmute::<_, *const Self>(buf.as_ptr()).read()
+    //     };
+    //     let (report, info) = packet.create_report(*prev);
 
-        *prev = info;
-        report
-    }
+    //     *prev = info;
+    //     report
+    // }
 }
 
 /// A (boot) mouse packet.
@@ -222,15 +286,15 @@ impl Packet for KeyboardPacket {
     }
 }
 
-/// A trait for markers for listener configuration.
+/// A marker trait for listener configuration.
 pub trait SupportedClassListeners: 'static {
     fn keyboard() -> fn(KeyboardReport);
     fn mouse() -> fn(MouseReport);
 }
 
-pub fn new_class<'b, B, L, A /* = Global */>(
+pub fn new_class_from_interface<'b, B, L, A /* = Global */>(
     base: u8, sub: u8, protocol: u8,
-    if_desc: InterfaceDescriptorBody,
+    index: u8,
     allocator: A
 ) -> Option<Box<dyn USBClass<B> + 'b, A>>
 where
@@ -238,16 +302,15 @@ where
     A: Allocator,
     L: SupportedClassListeners,
 {
-    let if_index = if_desc.b_interface_number as u16;
     match (base, sub, protocol) {
-        (2, _, _) => { // cdc
-            // todo!() // unsupported currently.
-            None
-        },
+        // (2, _, _) => { // cdc
+        //     // todo!() // unsupported currently.
+        //     None
+        // },
         (3, 1, 1) => { // keyboard
             Some(Box::new_in(
                 USBHIDClass::<B, KeyboardPacket>::new(
-                    if_index,
+                    index as u16,
                     L::keyboard()
                 ),
                 allocator
@@ -256,7 +319,7 @@ where
         (3, 1, 2) => { // mouse
             Some(Box::new_in(
                 USBHIDClass::<B, MousePacket>::new(
-                    if_index,
+                    index as u16,
                     L::mouse()
                 ),
                 allocator
