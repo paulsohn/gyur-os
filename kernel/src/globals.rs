@@ -23,6 +23,9 @@ pub fn init(
     CONSOLE.lock().get_or_init(|| {
         Console::new(&SCREEN) // by invoking `new()`, we also render an empty console rectangle.
     });
+
+    log::set_logger(&LOGGER).unwrap();
+    log::set_max_level(LOGGER.filter);
 }
 
 pub fn _console_print(args: Arguments){
@@ -39,3 +42,25 @@ macro_rules! console_println {
     () => ($crate::console_print!("\n"));
     ($($arg:tt)*) => ($crate::console_print!("{}\n", format_args!($($arg)*)));
 }
+
+/// The console logger.
+
+pub struct Logger {
+    pub filter: log::LevelFilter,
+}
+
+impl log::Log for Logger {
+    fn enabled(&self, metadata: &log::Metadata) -> bool {
+        metadata.level() <= self.filter
+    }
+
+    fn log(&self, record: &log::Record) {
+        if self.enabled(record.metadata()) {
+            console_println!("[{}] {}", record.level(), record.args());
+        }
+    }
+
+    fn flush(&self) { }
+}
+
+static LOGGER: Logger = Logger { filter: log::LevelFilter::Info };

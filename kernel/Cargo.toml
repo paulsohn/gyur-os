@@ -17,3 +17,4 @@ heapless = "0.7.16"
 
 xhci = { path = "./xhci" }
 usb-xhci = { path = "./usb-xhci" }
+log = "0.4.20"
