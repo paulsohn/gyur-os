@@ -8,7 +8,12 @@ use core::panic::PanicInfo;
 
 use shared::frame_buffer::FrameBuffer;
 use kernel::{
-    screen::ColorCode,
+    screen::{
+        ColorCode,
+        Pos2D,
+        // Disp2D,
+        Rect2D,
+    },
     // console::Console,
 
     cursor::{
@@ -64,19 +69,20 @@ pub extern "sysv64" fn _start (
         let mut screen_cell = globals::SCREEN.lock();
         let screen = screen_cell.get_mut().unwrap();
 
-        let x = 200usize;
-        let y = 100usize;
-
-        for xx in x..(x+SYSCURSOR_WIDTH).min(screen.resolution().0) {
-            for yy in y..(y+SYSCURSOR_HEIGHT).min(screen.resolution().1) {
-                let ch = match SYSCURSOR_SHAPE[yy-y][xx-x] {
-                    b'@' => ColorCode::BLACK,
-                    b'.' => ColorCode::WHITE,
-                    _ => continue, // transparent
-                };
-                screen.render_pixel((xx, yy), ch);
-            }
-        }
+        let cur_pos = Pos2D::from((200, 100));
+        let rect = Rect2D::from_lefttop_diag_boundary(
+            cur_pos,
+            (SYSCURSOR_WIDTH as isize, SYSCURSOR_HEIGHT as isize).into(),
+            screen.resolution()
+        );
+        rect.iterate_disp(|disp| {
+            let ch = match SYSCURSOR_SHAPE[disp.dy as usize][disp.dx as usize] {
+                b'@' => ColorCode::BLACK,
+                b'.' => ColorCode::WHITE,
+                _ => return, // transparent
+            };
+            screen.render_pixel(cur_pos + disp, ch);
+        });
     }
 
     use kernel::pci::Devices;

@@ -1,6 +1,7 @@
 
 use crate::screen::{
     ColorCode,
+    Pos2D,
     Screen
 };
 use crate::sysfont::{
@@ -44,9 +45,9 @@ impl Console{
     }
 
     /// get the pixel coordinate from given buffer position (i,j).
-    fn screen_coord(&self, (i, j): (usize, usize)) -> (usize, usize){
+    fn screen_coord(&self, (i, j): (usize, usize)) -> Pos2D{
         // (base_x+8*j,base_y+16*i)
-        (SYSFONT_WIDTH_PX*j, SYSFONT_HEIGHT_PX*i)
+        (SYSFONT_WIDTH_PX*j, SYSFONT_HEIGHT_PX*i).into()
     }
 
     /// refresh the screen by rendering chars in buffer.
