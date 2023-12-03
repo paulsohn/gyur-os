@@ -94,10 +94,12 @@ pub extern "sysv64" fn _start (
 
     log::info!("Hello, GYUR OS!");
 
-    let mut screen_cell = globals::SCREEN.lock();
-    let screen = screen_cell.get_mut().unwrap();
+    {
+        let mut screen_cell = globals::SCREEN.lock();
+        let screen = screen_cell.get_mut().unwrap();
 
-    screen.render_cursor();
+        screen.render_cursor();
+    }
 
     let mut xhc = setup_xhc_controller().unwrap();
     xhc.run();
