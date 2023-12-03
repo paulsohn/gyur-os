@@ -6,7 +6,11 @@ use crate::console::Console;
 
 use core::fmt::{Arguments, Write};
 use core::cell::OnceCell;
-use spin::Mutex; // `Mutex<OnceCell<T>>` mimics std `OnceLock`.
+use spin::mutex::Mutex;
+
+// `Mutex<OnceCell<T>>` mimics `std::sync::OnceLock`.
+// This is not true if we replace `Mutex` into `RwLock`, since `OnceCell` do not implement `Sync` trait (the immutable method `.get_or_init()` on `OnceCell` do not provide actual sync between threads.)
+// Simple check-skipping `Mutex<T>` or `RwLock<T>` can't be used here, since dummy value `unsafe { MaybeUninit::uninit().assume_init() }` (or even `zeroed()` instead of `uninit()`) are not permitted as a value of `T` and causes compile error, if `T` contains any reference values.
 
 pub static SCREEN: Mutex<OnceCell<Screen>> = Mutex::new(OnceCell::new());
 pub static CONSOLE: Mutex<OnceCell<Console>> = Mutex::new(OnceCell::new());

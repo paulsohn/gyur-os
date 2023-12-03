@@ -8,19 +8,7 @@ use core::panic::PanicInfo;
 
 use shared::frame_buffer::FrameBuffer;
 use kernel::{
-    screen::{
-        ColorCode,
-        Pos2D,
-        // Disp2D,
-        Rect2D,
-    },
     // console::Console,
-
-    cursor::{
-        SYSCURSOR_WIDTH,
-        SYSCURSOR_HEIGHT,
-        SYSCURSOR_SHAPE
-    },
 
     allocator::global_allocator,
 
@@ -47,7 +35,9 @@ impl SupportedClassListeners for Listeners {
     }
     fn mouse() -> fn(MouseReport) {
         fn mouse_listener(report: MouseReport) {
-            log::debug!("Mouse Report) {}, {}, {}", report.buttons, report.x, report.y);
+            log::debug!("Mouse Report) {}, {:?}", report.buttons, report.disp);
+
+            globals::SCREEN.lock().get_mut().unwrap().move_cursor(report.disp.into());
         }
 
         mouse_listener
@@ -104,25 +94,10 @@ pub extern "sysv64" fn _start (
 
     log::info!("Hello, GYUR OS!");
 
-    {
-        let mut screen_cell = globals::SCREEN.lock();
-        let screen = screen_cell.get_mut().unwrap();
+    let mut screen_cell = globals::SCREEN.lock();
+    let screen = screen_cell.get_mut().unwrap();
 
-        let cur_pos = Pos2D::from((200, 100));
-        let rect = Rect2D::from_lefttop_diag_boundary(
-            cur_pos,
-            (SYSCURSOR_WIDTH as isize, SYSCURSOR_HEIGHT as isize).into(),
-            screen.resolution()
-        );
-        rect.iterate_disp(|disp| {
-            let ch = match SYSCURSOR_SHAPE[disp.dy as usize][disp.dx as usize] {
-                b'@' => ColorCode::BLACK,
-                b'.' => ColorCode::WHITE,
-                _ => return, // transparent
-            };
-            screen.render_pixel(cur_pos + disp, ch);
-        });
-    }
+    screen.render_cursor();
 
     let mut xhc = setup_xhc_controller().unwrap();
     xhc.run();

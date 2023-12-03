@@ -232,14 +232,19 @@ pub struct MousePacket {
     pub x: i8,
     pub y: i8,
 }
-pub type MouseReport = MousePacket;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Default)]
+pub struct MouseReport {
+    pub buttons: u8,
+    pub disp: (isize, isize),
+}
 
 impl Packet for MousePacket {
     type Report = MouseReport;
     type Info = ();
 
-    fn create_report(&self, prev: Self::Info) -> (Self::Report, Self::Info) {
-        (*self, prev)
+    fn create_report(&self, _prev: Self::Info) -> (Self::Report, Self::Info) {
+        (MouseReport { buttons: self.buttons, disp: (self.x as isize, self.y as isize) }, ())
     }
 }
 

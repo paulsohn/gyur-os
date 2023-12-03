@@ -1,4 +1,3 @@
-use core::mem::MaybeUninit;
 use core::ops::{Add, AddAssign, Sub, Range};
 
 use shared::frame_buffer::{
@@ -10,6 +9,11 @@ use crate::sysfont::{
     SYSFONT,
     SYSFONT_WIDTH_PX,
     SYSFONT_HEIGHT_PX,
+};
+use crate::cursor::{
+    SYSCURSOR_WIDTH,
+    SYSCURSOR_HEIGHT,
+    SYSCURSOR_SHAPE
 };
 
 /// A struct for screen coordinate position.
@@ -141,54 +145,101 @@ impl Rect2D {
 pub struct ColorCode {
     pub r: u8,
     pub g: u8,
-    pub b: u8
+    pub b: u8,
 }
 
 impl ColorCode {
     /// Construct a color code with given RGB.
-    pub fn rgb(r: u8, g: u8, b:u8) -> Self {
+    #[allow(invalid_value)]
+    pub const fn rgb(r: u8, g: u8, b: u8) -> Self {
         Self { r, g, b }
     }
 
-    pub const BLACK  : Self = Self { r:0, g:0, b:0 };
-    pub const RED    : Self = Self { r:255, g:0, b:0 };
-    pub const GREEN  : Self = Self { r:0, g:255, b:0 };
-    pub const BLUE   : Self = Self { r:0, g:0, b:255 };
-    pub const CYAN   : Self = Self { r:0, g:255, b:255 };
-    pub const MAGENTA: Self = Self { r:255, g:0, b:255 };
-    pub const YELLOW : Self = Self { r:255, g:255, b:0 };
-    pub const WHITE  : Self = Self { r:255, g:255, b:255 };
+    pub const BLACK  : Self = Self::rgb(0, 0, 0);
+    pub const RED    : Self = Self::rgb(255, 0, 0);
+    pub const GREEN  : Self = Self::rgb(0, 255, 0);
+    pub const BLUE   : Self = Self::rgb(0, 0, 255);
+    pub const CYAN   : Self = Self::rgb(0, 255, 255);
+    pub const MAGENTA: Self = Self::rgb(255, 0, 255);
+    pub const YELLOW : Self = Self::rgb(255, 255, 0);
+    pub const WHITE  : Self = Self::rgb(255, 255, 255);
 
-    pub const GRAY   : Self = Self { r:127, g:127, b:127 };
+    pub const GRAY   : Self = Self::rgb(127, 127, 127);
+}
+
+pub trait Formatter {
+    fn write(&self, bytes: &mut PixelBytes, c: ColorCode);
+}
+
+static RGB_FORMATTER: RGBFormatter = RGBFormatter;
+pub struct RGBFormatter;
+impl Formatter for RGBFormatter {
+    fn write(&self, bytes: &mut PixelBytes, c: ColorCode) {
+        unsafe {
+            let [r, g, b] = bytes.get_many_unchecked_mut([0, 1, 2]);
+
+            (r as *mut u8).write_volatile(c.r);
+            (g as *mut u8).write_volatile(c.g);
+            (b as *mut u8).write_volatile(c.b);
+
+            // (&mut bytes[0] as *mut u8).write_volatile(c.r);
+            // (&mut bytes[1] as *mut u8).write_volatile(c.g);
+            // (&mut bytes[2] as *mut u8).write_volatile(c.b);
+
+            // (bytes as *mut PixelBytes).write_volatile([c.r, c.g, c.b, 0]);
+        }
+
+        // bytes[0] = c.r;
+        // bytes[1] = c.g;
+        // bytes[2] = c.b;
+    }
+}
+
+static BGR_FORMATTER: BGRFormatter = BGRFormatter;
+pub struct BGRFormatter;
+impl Formatter for BGRFormatter {
+    fn write(&self, bytes: &mut PixelBytes, c: ColorCode) {
+        unsafe {
+            let [r, g, b] = bytes.get_many_unchecked_mut([2, 1, 0]);
+
+            (r as *mut u8).write_volatile(c.r);
+            (g as *mut u8).write_volatile(c.g);
+            (b as *mut u8).write_volatile(c.b);
+
+            // (&mut bytes[0] as *mut u8).write_volatile(c.b);
+            // (&mut bytes[1] as *mut u8).write_volatile(c.g);
+            // (&mut bytes[2] as *mut u8).write_volatile(c.r);
+
+            // (bytes as *mut PixelBytes).write_volatile([c.b, c.g, c.r, 0]);
+        }
+
+        // bytes[0] = c.b;
+        // bytes[1] = c.g;
+        // bytes[2] = c.r;
+    }
 }
 
 /// A screen model wrapping frame buffer and its info.
 pub struct Screen {
     frame_buffer: FrameBuffer,
-    formatter: fn(ColorCode) -> PixelBytes // this effectively mimics the 'virtual method' pattern in other OOP language.
+    formatter: &'static dyn Formatter, // this effectively mimics the 'virtual method' pattern in other OOP language.
+
+    cursor: Pos2D,
 }
 
 impl From<FrameBuffer> for Screen {
     fn from(frame_buffer: FrameBuffer) -> Self {
-        #[allow(invalid_value)]
-        fn rgb_formatter(c: ColorCode) -> PixelBytes {
-            [c.r, c.g, c.b, unsafe{ MaybeUninit::uninit().assume_init() }]
-        }
-        
-        #[allow(invalid_value)]
-        fn bgr_formatter(c: ColorCode) -> PixelBytes {
-            [c.b, c.g, c.r, unsafe{ MaybeUninit::uninit().assume_init() }]
-        }
-
         Self {
             frame_buffer,
             formatter: match frame_buffer.format {
                 // `MaybeUninit` should not initialize fourth-byte.
                 // Closure seems buggy here. Select normal functions here instead.
-                PixelFormat::Rgb => rgb_formatter,
-                PixelFormat::Bgr => bgr_formatter,
+                PixelFormat::Rgb => &RGB_FORMATTER,
+                PixelFormat::Bgr => &BGR_FORMATTER,
                 _ => unimplemented!("Unsupported pixel format."),
-            }
+            },
+
+            cursor: Pos2D::from((0, 0)),
         }
     }
 }
@@ -201,8 +252,7 @@ impl Screen {
 
     /// write a color code into specific pixel.
     pub fn render_pixel(&mut self, pos: Pos2D, c: ColorCode) {
-        let bytes = (self.formatter)(c);
-        self.frame_buffer[pos.into()].write(bytes);
+        self.formatter.write(&mut self.frame_buffer[pos.into()], c);
     }
 
     pub fn fill_rect(&mut self, rect: Rect2D, c: ColorCode){
@@ -246,6 +296,35 @@ impl Screen {
     }
 }
 
-// @TODO remove unsafe impl
+impl Screen {
+    fn get_cursor_rect(&self) -> Rect2D {
+        Rect2D::from_lefttop_diag_boundary(
+            self.cursor,
+            (SYSCURSOR_WIDTH as isize, SYSCURSOR_HEIGHT as isize).into(),
+            self.resolution(),
+        )
+    }
+
+    pub fn render_cursor(&mut self) {
+        self.get_cursor_rect().iterate_disp(|disp| {
+            let ch = match SYSCURSOR_SHAPE[disp.dy as usize][disp.dx as usize] {
+                b'@' => ColorCode::BLACK,
+                b'.' => ColorCode::WHITE,
+                _ => return, // transparent
+            };
+            self.render_pixel(self.cursor + disp, ch);
+        });
+    }
+
+    pub fn move_cursor(&mut self, disp: Disp2D) {
+        self.fill_rect(
+            self.get_cursor_rect(),
+            ColorCode::GRAY // Console bg
+        );
+        self.cursor += disp;
+        self.render_cursor();
+    }
+}
+
 // unsafe impl Sync for Screen {}
 unsafe impl Send for Screen {}

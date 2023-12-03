@@ -1,5 +1,5 @@
 use core::ops::{Index, IndexMut};
-use volatile::Volatile; // crate volatile v0.3.0 for data-layer volatility
+// use volatile::Volatile; // crate volatile v0.3.0 for data-layer volatility
 
 pub use uefi::proto::console::gop::{PixelFormat, ModeInfo};
 
@@ -10,7 +10,7 @@ pub type PixelBytes = [u8; BYTES_PER_PIXEL];
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[repr(C)]
 pub struct FrameBuffer {
-    base: *mut Volatile<PixelBytes>,
+    base: *mut PixelBytes,
     stride: usize,
     /// horizontal pixel count.
     pub hor_res: usize,
@@ -36,7 +36,7 @@ impl FrameBuffer {
 }
 
 impl Index<(usize, usize)> for FrameBuffer {
-    type Output = Volatile<PixelBytes>;
+    type Output = PixelBytes;
 
     fn index(&self, (x, y): (usize, usize)) -> &Self::Output {
         unsafe { & *self.base.add(self.stride * y + x) }

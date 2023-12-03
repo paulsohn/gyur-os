@@ -10,7 +10,7 @@ use crate::sysfont::{
 };
 
 use core::cell::OnceCell;
-use spin::Mutex;
+use spin::mutex::Mutex;
 
 const CONSOLE_ROWS: usize = 25;
 const CONSOLE_COLS: usize = 80;
