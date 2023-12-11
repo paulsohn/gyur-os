@@ -1,0 +1,3 @@
+[submodule "kernel/xhci"]
+	path = kernel/xhci
+	url = https://github.com/paulsohn/xhci
