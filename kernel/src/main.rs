@@ -52,26 +52,7 @@ fn setup_xhc_controller() -> Option<Controller<'static, Listeners>> {
     }
 
     let mmio_base = devices.as_slice().iter().find(|&dev| {
-    //     dev.class_code().match_base_sub_interface(0x0c, 0x03, 0x30) && dev.vendor_id() == 0x8086
-    // }).and_then(|xdev| {
-    //     log::debug!("An Intel xHC has been detected.");
-
-    //     let switch_ehci_to_xhci = devices.as_slice().iter().find(|&dev| {
-    //         dev.class_code().match_base_sub_interface(0x0c, 0x03, 0x20)
-    //     }).is_some();
-
-    //     if switch_ehci_to_xhci {
-    //         // read and write `xdev`
-    //         xdev.read_write_offset(0xdc, 0xd8); // Superspeed Ports
-    //         xdev.read_write_offset(0xd4, 0xd0); // eHCi to xHCi ports
-    //         log::debug!("Switched eHCi to xHCi.");
-    //     }
-
-    //     Some(xdev)
-    // }).or_else(|| {
-    //     devices.as_slice().iter().find(|&dev| {
-            dev.class_code().match_base_sub_interface(0x0c, 0x03, 0x30)
-    //     })
+        dev.class_code().match_base_sub_interface(0x0c, 0x03, 0x30)
     }).and_then(|xdev| {
         log::debug!("xHC has been found: {}.{}.{}.", xdev.bus(), xdev.slot_fun().0, xdev.slot_fun().1);
 
@@ -109,7 +90,7 @@ pub extern "sysv64" fn _start (
         xhc.process_events();
     }
 
-    halt();
+    // halt();
 }
 
 #[panic_handler]
