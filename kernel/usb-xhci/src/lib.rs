@@ -5,12 +5,17 @@
 #![feature(ptr_metadata)]
 #![feature(pointer_byte_offsets)]
 // #![feature(inherent_associated_types)]
+#![feature(maybe_uninit_uninit_array)]
+
+// extern crate alloc;
 
 pub mod arraymap;
 
 pub mod descriptor;
 pub mod endpoint;
 pub mod setup;
+
+pub mod ring;
 
 pub mod bus;
 pub mod class;

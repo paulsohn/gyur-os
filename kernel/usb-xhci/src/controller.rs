@@ -10,30 +10,24 @@ use alloc::vec::Vec;
 use crate::endpoint::{EndpointAddress, EndpointType, EndpointConfig};
 use crate::setup::SetupRequest;
 
+use crate::ring::{CommandRing, EventRing};
+
 use crate::device::Device;
 use crate::bus::{USBBus, XHCIBus};
 use crate::class::{USBClass, SupportedClassListeners};
 
-use xhci::accessor::single;
-use xhci::accessor::array::{BoundedStructural, BoundedStructuralMut};
-use xhci::accessor::mapper::Identity;
+use volatile::VolatilePtr;
+// use volatile::map_field;
+use volatile_field::Structural;
+
 use xhci::registers::{
     Registers,
     operational::PortStatusAndControlRegister,
     doorbell::Doorbell,
+    extended_capabilities::ExtendedCapabilities,
 };
-use xhci::ring::{self, trb, buf::block::Block};
+use xhci::ring::trb::{transfer, event, command};
 use xhci::context;
-use xhci::extended_capabilities::{
-    ExtendedCapability,
-    List,
-};
-
-macro_rules! block {
-    ($e:expr) => {
-        Block::new($e.into_raw())
-    }
-}
 
 pub const MAX_DEVICE_SLOTS: usize = 8;
 
@@ -45,20 +39,18 @@ where
 {
     pub(crate) device: RefCell<Device<B, L, A>>,
     pub(crate) bus: B,
-    pub(crate) class_drivers: RefCell<Vec<Box<dyn USBClass<B>, A>, A>>,
+    pub(crate) class_drivers: RefCell<Vec<Box<dyn USBClass, A>, A>>,
     pub(crate) ep_configs: RefCell<Vec<EndpointConfig, A>>,
 }
-pub type XHCIDeviceEntry<L, A = Global> = DeviceEntry<XHCIBus<L, A>, L, A>;
+pub type XHCIDeviceEntry<'r, L, A = Global> = DeviceEntry<XHCIBus<'r, L, A>, L, A>;
 
-impl<L, A> XHCIDeviceEntry<L, A>
+impl<'r, L, A> XHCIDeviceEntry<'r, L, A>
 where
     A: Allocator + Clone + 'static,
     L: SupportedClassListeners,
 {
-    // type B = XHCIBus<L, A>;
-
     pub fn new(
-        db: single::ReadWrite<Doorbell, Identity>, 
+        db: VolatilePtr<'r, Doorbell>, 
         use_64byte: bool,
         allocator: A
     ) -> Self {
@@ -75,7 +67,7 @@ where
 #[repr(C, align(64))]
 pub struct DeviceContextBaseAddressArray {
     scratchpad: *mut *const core::mem::MaybeUninit<u8>,
-    ctx_base_ptrs: [*mut xhci::context::Output32Byte; MAX_DEVICE_SLOTS],
+    ctx_base_ptrs: [*mut context::Output32Byte; MAX_DEVICE_SLOTS],
 }
 
 impl DeviceContextBaseAddressArray {
@@ -90,20 +82,20 @@ impl DeviceContextBaseAddressArray {
     }
 }
 
-pub struct XHCIDeviceManager<L, A = Global>
+pub struct XHCIDeviceManager<'r, L, A = Global>
 where
     A: Allocator + Clone + 'static,
     L: SupportedClassListeners,
 {
     pub(crate) dcbaa: Box<DeviceContextBaseAddressArray, A>,
 
-    entries: [Option<Box<XHCIDeviceEntry<L, A>, A>>; MAX_DEVICE_SLOTS],
+    entries: [Option<Box<XHCIDeviceEntry<'r, L, A>, A>>; MAX_DEVICE_SLOTS],
 
     _listeners: PhantomData<L>,
     allocator: A,
 }
 
-impl<L, A> XHCIDeviceManager<L, A>
+impl<'r, L, A> XHCIDeviceManager<'r, L, A>
 where
     A: Allocator + Clone + 'static,
     L: SupportedClassListeners,
@@ -117,7 +109,7 @@ where
         }
     }
 
-    pub fn alloc_entry(&mut self, slot_id: usize, use_64byte: bool, db: single::ReadWrite<Doorbell, Identity>) -> &Box<XHCIDeviceEntry<L, A>, A> {
+    pub fn alloc_entry(&mut self, slot_id: usize, use_64byte: bool, db: VolatilePtr<'r, Doorbell>) -> &Box<XHCIDeviceEntry<'r, L, A>, A> {
         assert!(slot_id <= MAX_DEVICE_SLOTS);
 
         if self.entries[slot_id - 1].is_some() {
@@ -141,7 +133,7 @@ where
         self.dcbaa.scratchpad = sp_ptr;
     }
 
-    pub fn entry_at(&self, slot_id: usize) -> Option<&Box<XHCIDeviceEntry<L, A>, A>> {
+    pub fn entry_at(&self, slot_id: usize) -> Option<&Box<XHCIDeviceEntry<'r, L, A>, A>> {
         self.entries[slot_id - 1].as_ref()
     }
 }
@@ -160,16 +152,16 @@ enum PortConfigPhase {
 }
 
 /// A xCHI controller.
-pub struct Controller<L, A = Global>
+pub struct Controller<'r, L, A = Global>
 where
     A: Allocator + Clone + 'static,
     L: SupportedClassListeners,
 {
-    regs: Registers<Identity>,
+    regs: Registers<'r>,
 
-    dev_mgr: XHCIDeviceManager<L, A>,
-    cmd_ring: ring::buf::CommandRing<A>,
-    ev_ring: ring::buf::EventRing<A, Identity>,
+    dev_mgr: XHCIDeviceManager<'r, L, A>,
+    cmd_ring: RefCell<CommandRing<A>>,
+    ev_ring: EventRing<'r, A>,
 
     // Below are controller global variable in MikanOS.
 
@@ -181,32 +173,27 @@ where
     // allocator: A,
 }
 
-impl<L, A> Controller<L, A>
+impl<'r, L, A> Controller<'r, L, A>
 where
     A: Allocator + Clone + 'static,
     L: SupportedClassListeners,
 {
     pub fn new(mmio_base: u64, allocator: A) -> Self {
         let mut regs = unsafe {
-            Registers::new(mmio_base as usize, Identity)
+            Registers::new(mmio_base as usize)
         };
 
-        let cap = &mut regs.capability;
-        let op = &mut regs.operational;
+        let extcap_list = regs.extended_capabilities();
 
-        let hccparams1 = cap.hccparams1.read_volatile();
+        let cap = &regs.capability;
+        // let hccparams1 = map_field!(cap.hccparams1).read();
+        // let hcsparams2 = map_field!(cap.hcsparams2).read();
+        let hccparams1 = cap.fields().hccparams1().read();
+        let hcsparams2 = cap.fields().hcsparams2().read();
 
         // Request Host Controller ownership
         {
-            let mut ext_list: List<Identity> = unsafe {
-                List::new(
-                    mmio_base as usize,
-                    hccparams1,
-                    Identity
-                ).unwrap()
-            };
-
-            let opt_acc_legsup = ext_list.into_iter().find_map(|ext| {
+            let opt_ptr_legsup = extcap_list.into_iter().find_map(|ext| {
                 // ext.ok().map(|ext| {
                 //     if let ExtendedCapability::UsbLegacySupport(ext_cap_usb) = ext {
                 //         Some(ext_cap_usb.usblegsup)
@@ -215,66 +202,72 @@ where
                 //     }
                 // }).flatten()
 
-                if let Ok(ExtendedCapability::<Identity>::UsbLegacySupport(ext_cap_usb)) = ext {
-                    Some(ext_cap_usb.usblegsup)
+                if let Ok(ExtendedCapabilities::UsbLegacySupport(ext_cap_usb)) = ext {
+                    Some(ext_cap_usb.ptr)
                 } else {
                     None
                 }
             });
 
-            if let Some(mut acc_legsup) = opt_acc_legsup {
-                let mut legsup = acc_legsup.read_volatile();
-                if !legsup.hc_os_owned_semaphore() {
-                    legsup.set_hc_os_owned_semaphore();
-                    acc_legsup.write_volatile(legsup);
+            if let Some(ptr_legsup) = opt_ptr_legsup {
+                let mut legsup = ptr_legsup.read();
+                if !legsup.cap_header.hc_os_owned_semaphore() {
+                    legsup.cap_header.set_hc_os_owned_semaphore();
+                    ptr_legsup.write(legsup);
 
                     // wait until os gets controller ownership.
                     while {
-                        let legsup = acc_legsup.read_volatile();
-                        !legsup.hc_os_owned_semaphore() || legsup.hc_bios_owned_semaphore()
+                        let legsup = ptr_legsup.read();
+                        !legsup.cap_header.hc_os_owned_semaphore() || legsup.cap_header.hc_bios_owned_semaphore()
                     } {}
                 }
             }
         }
 
+        let op = &mut regs.operational;
+        // let op_usbcmd = map_field!(op.usbcmd);
+        // let op_usbsts = map_field!(op.usbsts);
+        let op_usbcmd = op.fields().usbcmd();
+        let op_usbsts = op.fields().usbsts();
+
         // disable interrupt for controller and stop
         {
-            let usbsts = op.usbsts.read_volatile();
-            let hc_halted = usbsts.hc_halted();
+            let hc_halted = op_usbsts.read().hc_halted();
 
-            op.usbcmd.update_volatile(|usbcmd| {
+            op_usbcmd.update(|mut usbcmd| {
                 usbcmd.clear_interrupter_enable()
                     .clear_host_system_error_enable()
                     .clear_enable_wrap_event();
                 if hc_halted {
                     usbcmd.clear_run_stop(); // stop
                 }
+                usbcmd
             });
 
             // wait until hc has halted
-            while !op.usbsts.read_volatile().hc_halted() {}
+            while !op_usbsts.read().hc_halted() {}
         }
 
         // todo: read page size
 
         // Reset controller.
         {
-            op.usbcmd.update_volatile(|usbcmd| {
-                usbcmd.set_host_controller_reset();
+            op_usbcmd.update(|mut usbcmd| {
+                *usbcmd.set_host_controller_reset()
             });
 
             // wait until `hc_reset` bit has been consumed.
-            while op.usbcmd.read_volatile().host_controller_reset() {}
+            while op_usbcmd.read().host_controller_reset() {}
 
             // wait until controller is ready.
-            while op.usbsts.read_volatile().controller_not_ready() {}
+            while op_usbsts.read().controller_not_ready() {}
         }
 
         // Set max device slots.
         {
-            op.config.update_volatile(|config| {
+            op.fields().config().update(|mut config| {
                 let slots = MAX_DEVICE_SLOTS as u8;
-                config.set_max_device_slots_enabled(slots);
+                *config.set_max_device_slots_enabled(slots)
             });
         }
 
@@ -283,7 +276,6 @@ where
 
         // Allocate scratchpad buffer arrays.
         {
-            let hcsparams2 = cap.hcsparams2.read_volatile();
             let max_sp_buffers = hcsparams2.max_scratchpad_buffers();
 
             if max_sp_buffers > 0 {
@@ -307,53 +299,46 @@ where
         // set DCBAA Pointer
         {
             let dcbaa_ptr = &*dev_mgr.dcbaa as *const _ as usize as u64;
-            op.dcbaap.update_volatile(|dcbaap| {
-                dcbaap.set(dcbaa_ptr);
+            op.fields().dcbaap().update(|mut dcbaap| {
+                *dcbaap.set(dcbaa_ptr)
             });
         }
 
         // initialize Command Ring.
         let cmd_ring = {
-            let cmd_ring = ring::buf::CommandRing::new(32, allocator.clone());
+            let cmd_ring = CommandRing::new(32, allocator.clone());
 
             let buf_ptr = unsafe { cmd_ring.get_buf_ptr(0) };
 
             // register this ring
-            op.crcr.update_volatile(|crcr| {
-                crcr.set_ring_cycle_state()
+            op.fields().crcr().update(|mut crcr| {
+                *crcr.set_ring_cycle_state()
                     // .clear_command_stop()
                     // .clear_command_abort()
                     .set_command_ring_pointer(buf_ptr as usize as u64)
             });
 
-            cmd_ring
+            RefCell::new(cmd_ring)
         };
 
         // initialize Event Ring and its primary interrupter (interrupter 0)
         let ev_ring = {
-            use xhci::accessor::single::BoundedStructuralMut;
-
             // The primary interrupter.
-            let mut interrupter = unsafe { regs.interrupter_register_set.unbounded_at(0) };
+            let interrupter = regs.interrupter_register_set_array.index(0);
 
             // enable interrupt for primary interrupter
-            interrupter.structural_mut().iman.update_volatile(|iman| {
-                iman.clear_interrupt_pending() // RW1C, this writes 1 to clear
-                    .set_interrupt_enable();
+            interrupter.fields().iman().update(|mut iman| {
+                *iman.clear_interrupt_pending() // RW1C, this writes 1 to clear
+                    .set_interrupt_enable()
             });
 
             // enable interrupt for controller
-            op.usbcmd.update_volatile(|usbcmd| {
-                usbcmd.set_interrupter_enable();
+            op_usbcmd.update(|mut usbcmd| {
+                *usbcmd.set_interrupter_enable()
             });
 
-            let ev_ring = ring::buf::EventRing::new(
-                interrupter,
-                32,
-                allocator.clone()
-            ); // the event ring is already registered on construction
-
-            ev_ring
+            EventRing::new(interrupter, 32, allocator.clone())
+            // the event ring is already registered on construction
         };
 
         Self {
@@ -378,29 +363,26 @@ where
 
         // set run-stop bit
         {
-            op.usbcmd.update_volatile(|usbcmd| {
-                usbcmd.set_run_stop();
+            op.fields().usbcmd().update(|mut usbcmd| {
+                *usbcmd.set_run_stop()
             });
-            let _refresh = op.usbcmd.read_volatile();
+            let _refresh = op.fields().usbcmd().read();
 
             // wait until hc is running
-            while op.usbsts.read_volatile().hc_halted() {}
+            while op.fields().usbsts().read().hc_halted() {}
         }
     }
 
     pub fn process_events(&mut self) {
         if let Some(block) = self.ev_ring.pop() {
-            match block.into_raw().try_into().unwrap() {
-                trb::event::Allowed::PortStatusChange(psc) => {
-                    self.on_port_status_change(psc.port_id() as usize);
-                },
-                trb::event::Allowed::TransferEvent(te) => {
-                    self.on_transfer(te);
-                },
-                trb::event::Allowed::CommandCompletion(cc) => {
-                    self.on_cmd_complete(cc);
-                },
-                _ => unimplemented!("Unsupported Event TRB."),
+            if let Ok(psc) = event::PortStatusChange::try_from(block) {
+                self.on_port_status_change(psc.port_id() as usize);
+            } else if let Ok(te) = event::TransferEvent::try_from(block) {
+                self.on_transfer(te);
+            } else if let Ok(cc) = event::CommandCompletion::try_from(block) {
+                self.on_cmd_complete(cc);
+            } else {
+                unimplemented!("Unsupported Event TRB.");
             }
         }
     }
@@ -415,7 +397,7 @@ where
 }
 
 // Port basic functions.
-impl<L, A> Controller<L, A>
+impl<L, A> Controller<'_, L, A>
 where
     A: Allocator + Clone + 'static,
     L: SupportedClassListeners,
@@ -424,7 +406,7 @@ where
     /// 
     /// i.e. the valid port numbers are `1..=num_ports`.
     fn num_ports(&self) -> usize {
-        self.regs.port_register_set.len()
+        self.regs.port_register_set_array.len()
     }
 
     /// Returns `i`th port status and control register, where `i` is 1-indexed.
@@ -432,11 +414,9 @@ where
     /// Panics when `i == 0`.
     fn portsc_at(&self, i: usize) -> PortStatusAndControlRegister {
         assert!(i > 0);
-        // self.regs.port_register_set.read_volatile_at(i).portsc
-        self.regs.port_register_set
-            .structural_at(i - 1)
-            .portsc
-            .read_volatile()
+        self.regs.port_register_set_array.index(i - 1)
+            .fields().portsc()
+            .read()
     }
 
     fn port_is_connected(&self, i: usize) -> bool {
@@ -479,12 +459,11 @@ where
         }
 
         assert!(i > 0);
-        self.regs.port_register_set
-            .structural_at_mut(i - 1)
-            .portsc
-            .update_volatile(|portsc|{
-                portsc_protect(portsc);
-                f(portsc);
+        self.regs.port_register_set_array.index(i - 1)
+            .fields().portsc()
+            .update(|mut portsc|{
+                f(portsc_protect(&mut portsc));
+                portsc
             });
     }
 
@@ -492,19 +471,19 @@ where
 }
 
 // Basic Command ring and Port configuration functions.
-impl<L, A> Controller<L, A>
+impl<L, A> Controller<'_, L, A>
 where
     A: Allocator + Clone + 'static,
     L: SupportedClassListeners,
 {
     // Push the block into the cmd ring and ring doorbell 0.
-    fn push_cmd(&mut self, block: Block) {
-        self.cmd_ring.push(block);
+    fn push_cmd(&self, block: command::TRB) {
+        self.cmd_ring.borrow_mut().push(block);
         
         // Ring doorbell 0.
-        self.regs.doorbell.at_mut(0).update_volatile(|doorbell| {
-            doorbell.set_doorbell_target(0)
-                .set_doorbell_stream_id(0);
+        self.regs.doorbell_array.index(0).update(|mut doorbell| {
+            *doorbell.set_doorbell_target(0)
+                .set_doorbell_stream_id(0)
         });
     }
 
@@ -550,9 +529,7 @@ where
 
         self.port_cfg_phase[port_id - 1] = PortConfigPhase::EnablingSlot;
 
-        self.push_cmd(block!(
-            trb::command::EnableSlot::new()
-        ));
+        self.push_cmd(command::EnableSlot::new().into());
     }
 
     fn address_device(&mut self, port_id: usize, slot_id: usize) {
@@ -564,9 +541,7 @@ where
             _ => 8,
         };
 
-        let db = unsafe {
-            self.regs.doorbell.unbounded_at(slot_id)
-        };
+        let db = self.regs.doorbell_array.index(slot_id);
 
         let entry = self.dev_mgr.alloc_entry(slot_id, self.use_64byte_context, db);
         let bus = &entry.bus;
@@ -577,34 +552,37 @@ where
 
         // initialize slot context.
         bus.use_input_slot_ctx(|slot_ctx| {
-            slot_ctx.set_route_string(0);
-            slot_ctx.set_root_hub_port_number(port_id as u8);
-            slot_ctx.set_context_entries(1);
-            slot_ctx.set_speed(port_speed);
+            slot_ctx.set_route_string(0)
+                .set_root_hub_port_number(port_id as u8)
+                .set_context_entries(1)
+                .set_speed(port_speed)
+            ;
         });
 
         // initialize EP0 context.
         bus.use_input_ep_ctx(EndpointAddress::control(), |ep0_ctx| {
-            ep0_ctx.set_endpoint_type(context::EndpointType::Control);
-            ep0_ctx.set_max_packet_size(max_packet_size);
-            ep0_ctx.set_max_burst_size(0);
-            ep0_ctx.set_tr_dequeue_pointer(tr_buf as usize as u64);
-            ep0_ctx.set_dequeue_cycle_state();
-            ep0_ctx.set_interval(0);
-            ep0_ctx.set_max_primary_streams(0);
-            ep0_ctx.set_mult(0);
-            ep0_ctx.set_error_count(3);
-            ep0_ctx.set_endpoint_state(context::EndpointState::Disabled);
+            ep0_ctx.set_endpoint_type(context::EndpointType::Control)
+                .set_max_packet_size(max_packet_size)
+                .set_max_burst_size(0)
+                .set_tr_dequeue_pointer(tr_buf as usize as u64)
+                .set_dequeue_cycle_state()
+                .set_interval(0)
+                .set_max_primary_streams(0)
+                .set_mult(0)
+                .set_error_count(3)
+                .set_endpoint_state(context::EndpointState::Disabled)
+            ;
         });
 
         self.port_cfg_phase[port_id - 1] = PortConfigPhase::AddressingDevice;
 
         let input_ctx_ptr = bus.input_ctx_ptr();
-        self.push_cmd(block!(
-            *trb::command::AddressDevice::new()
+        self.push_cmd(
+            (*command::AddressDevice::new()
                 .set_slot_id(slot_id as u8)
                 .set_input_context_pointer(input_ctx_ptr as usize as u64)
-        ));
+            ).into()
+        );
     }
 
     fn initialize_device(&mut self, port_id: usize, slot_id: usize) {
@@ -630,7 +608,7 @@ where
 }
 
 // Event handler functions.
-impl<L, A> Controller<L, A>
+impl<L, A> Controller<'_, L, A>
 where
     A: Allocator + Clone + 'static,
     L: SupportedClassListeners,
@@ -643,7 +621,7 @@ where
         };
     }
 
-    fn on_transfer(&mut self, te: trb::event::TransferEvent) {
+    fn on_transfer(&mut self, te: event::TransferEvent) {
         let slot_id = te.slot_id() as usize;
 
         let entry = self.dev_mgr.entry_at(slot_id).unwrap();
@@ -654,8 +632,8 @@ where
         // bus on transfer.
         {
             if ![
-                trb::event::CompletionCode::Success,
-                trb::event::CompletionCode::ShortPacket
+                event::CompletionCode::Success,
+                event::CompletionCode::ShortPacket
             ].contains(&te.completion_code().unwrap())
             {
                 panic!("Transfer Failed");
@@ -663,12 +641,12 @@ where
 
             let ep_addr = EndpointAddress::from_dci(te.endpoint_id());
 
-            let issuer_pos = te.trb_pointer() as usize as *const Block;
+            let issuer_pos = te.trb_pointer() as usize as *const transfer::TRB;
             let issuer = unsafe {
                 issuer_pos.read_volatile()
             };
 
-            if let Ok(normal_trb) = trb::transfer::Normal::try_from(issuer.into_raw()) {
+            if let Ok(normal_trb) = transfer::Normal::try_from(issuer) {
                 // The issuer is normal TRB.
                 let buf = unsafe {
                     core::slice::from_raw_parts_mut(
@@ -684,7 +662,7 @@ where
                 let req = SetupRequest::from_setup_stage_trb(setup_stage_trb);
 
                 let buf = unsafe {
-                    if let Ok(data_stage_trb) = trb::transfer::DataStage::try_from(issuer.into_raw()) {
+                    if let Ok(data_stage_trb) = transfer::DataStage::try_from(issuer) {
                         core::slice::from_raw_parts_mut(
                             data_stage_trb.data_buffer_pointer() as usize as *mut u8,
                             (data_stage_trb.trb_transfer_length() - te.trb_transfer_length()) as usize
@@ -693,9 +671,22 @@ where
                         core::slice::from_raw_parts_mut(core::ptr::NonNull::<u8>::dangling().as_ptr(), 0)
                     }
                 };
-    
+
                 entry.device.borrow_mut()
-                    .on_control_completed(bus, class_drivers, ep_configs, ep_addr, req, buf);
+                    .on_control_completed(
+                        bus,
+                        class_drivers,
+                        ep_configs,
+                        ep_addr, req, buf
+                    );
+
+                // entry.device.borrow_mut()
+                //     .on_control_completed(
+                //         bus,
+                //         class_drivers,
+                //         ep_configs,
+                //         ep_addr, req, buf
+                //     );
             } else {
                 panic!("No corresponding Setup Stage for the issuer");
             }
@@ -730,70 +721,68 @@ where
                 let tr_buf = bus.alloc_tr(ep_config.addr, 32);
 
                 bus.use_input_ep_ctx(ep_config.addr, |ep_ctx| {
-                    ep_ctx.set_endpoint_type(ep_config.ep_type_with_dir());
-                    ep_ctx.set_max_packet_size(ep_config.max_packet_size);
-                    ep_ctx.set_interval(convert_interval(ep_config.ep_type(), ep_config.interval));
-                    ep_ctx.set_average_trb_length(1);
-                    ep_ctx.set_tr_dequeue_pointer(tr_buf as usize as u64);
-                    ep_ctx.set_dequeue_cycle_state();
-                    ep_ctx.set_max_primary_streams(0);
-                    ep_ctx.set_mult(0);
-                    ep_ctx.set_error_count(3);
+                    ep_ctx.set_endpoint_type(ep_config.ep_type_with_dir())
+                        .set_max_packet_size(ep_config.max_packet_size)
+                        .set_interval(convert_interval(ep_config.ep_type(), ep_config.interval))
+                        .set_average_trb_length(1)
+                        .set_tr_dequeue_pointer(tr_buf as usize as u64)
+                        .set_dequeue_cycle_state()
+                        .set_max_primary_streams(0)
+                        .set_mult(0)
+                        .set_error_count(3);
                 });
             }
 
             self.port_cfg_phase[port_id - 1] = PortConfigPhase::ConfiguringEndpoints;
 
             let input_ctx_ptr = bus.input_ctx_ptr();
-            self.push_cmd(block!(
-                *trb::command::ConfigureEndpoint::new()
+            self.push_cmd(
+                (*command::ConfigureEndpoint::new()
                     .set_slot_id(slot_id as u8)
                     .set_input_context_pointer(input_ctx_ptr as usize as u64)
-            ));
+                ).into()
+            );
         }
     }
 
-    fn on_cmd_complete(&mut self, cc: trb::event::CommandCompletion) {
+    fn on_cmd_complete(&mut self, cc: event::CommandCompletion) {
         let slot_id = cc.slot_id() as usize;
         let issuer = unsafe {
-            (cc.command_trb_pointer() as usize as *const Block).read()
+            (cc.command_trb_pointer() as usize as *const command::TRB).read_volatile()
         };
 
-        match issuer.into_raw().try_into().unwrap() {
-            trb::command::Allowed::EnableSlot(_) => {
-                assert!(self.port_cfg_phase[self.addressing_port - 1] == PortConfigPhase::EnablingSlot);
+        if let Ok(_) = command::EnableSlot::try_from(issuer) {
+            assert!(self.port_cfg_phase[self.addressing_port - 1] == PortConfigPhase::EnablingSlot);
 
-                self.address_device(self.addressing_port, slot_id);
-            },
-            trb::command::Allowed::AddressDevice(_issuer) => {
-                let entry = self.dev_mgr.entry_at(slot_id).unwrap();
-                let bus = &entry.bus;
-                let port_id = bus.port_id();
+            self.address_device(self.addressing_port, slot_id);
+        } else if let Ok(_) = command::AddressDevice::try_from(issuer) {
+            let entry = self.dev_mgr.entry_at(slot_id).unwrap();
+            let bus = &entry.bus;
+            let port_id = bus.port_id();
 
-                assert!(port_id == self.addressing_port);
-                assert!(self.port_cfg_phase[port_id - 1] == PortConfigPhase::AddressingDevice);
+            assert!(port_id == self.addressing_port);
+            assert!(self.port_cfg_phase[port_id - 1] == PortConfigPhase::AddressingDevice);
 
-                // Wake a waiting port, if any.
-                self.addressing_port = 0;
-                for i in 1..=self.num_ports() {
-                    if self.port_cfg_phase[i - 1] == PortConfigPhase::WaitingAddressed {
-                        self.reset_port(i);
-                        break;
-                    }
+            // Wake a waiting port, if any.
+            self.addressing_port = 0;
+            for i in 1..=self.num_ports() {
+                if self.port_cfg_phase[i - 1] == PortConfigPhase::WaitingAddressed {
+                    self.reset_port(i);
+                    break;
                 }
+            }
 
-                self.initialize_device(port_id, slot_id);
-            },
-            trb::command::Allowed::ConfigureEndpoint(_) => {
-                let entry = self.dev_mgr.entry_at(slot_id).unwrap();
-                let bus = &entry.bus;
-                let port_id = bus.port_id();
+            self.initialize_device(port_id, slot_id);
+        } else if let Ok(_) = command::ConfigureEndpoint::try_from(issuer) {
+            let entry = self.dev_mgr.entry_at(slot_id).unwrap();
+            let bus = &entry.bus;
+            let port_id = bus.port_id();
 
-                assert!(self.port_cfg_phase[port_id - 1] == PortConfigPhase::ConfiguringEndpoints);
+            assert!(self.port_cfg_phase[port_id - 1] == PortConfigPhase::ConfiguringEndpoints);
 
-                self.complete_configuration(port_id, slot_id);
-            },
-            _ => unreachable!("Unsupported command TRB"),
+            self.complete_configuration(port_id, slot_id);
+        } else {
+            unreachable!("Unsupported command TRB.");
         }
     }
 }

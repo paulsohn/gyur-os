@@ -73,7 +73,8 @@ pub enum EndpointType {
     Interrupt = 3,
 }
 
-pub use xhci::context::EndpointType as EndpointDirectedType;
+use xhci::context;
+pub use context::EndpointType as EndpointDirectedType;
 
 impl EndpointType {
     /// Returns a Directed Endpoint type for the given Endpoint type and its direction.
@@ -89,14 +90,14 @@ impl EndpointType {
             }
         }
         // match (self, is_in) {
-        //     (EndpointType::Control, _) => xhci::context::EndpointType::Control,
-        //     (EndpointType::Isochronous, false) => xhci::context::EndpointType::IsochOut,
-        //     (EndpointType::Isochronous, true) => xhci::context::EndpointType::IsochIn,
-        //     (EndpointType::Bulk, false) => xhci::context::EndpointType::BulkOut,
-        //     (EndpointType::Bulk, true) => xhci::context::EndpointType::BulkIn,
-        //     (EndpointType::Interrupt, false) => xhci::context::EndpointType::InterruptOut,
-        //     (EndpointType::Interrupt, true) => xhci::context::EndpointType::InterruptIn,
-        //     // _ => xhci::context::EndpointType::NotValid,
+        //     (EndpointType::Control, _) => EndpointDirectedType::Control,
+        //     (EndpointType::Isochronous, false) => EndpointDirectedType::IsochOut,
+        //     (EndpointType::Isochronous, true) => EndpointDirectedType::IsochIn,
+        //     (EndpointType::Bulk, false) => EndpointDirectedType::BulkOut,
+        //     (EndpointType::Bulk, true) => EndpointDirectedType::BulkIn,
+        //     (EndpointType::Interrupt, false) => EndpointDirectedType::InterruptOut,
+        //     (EndpointType::Interrupt, true) => EndpointDirectedType::InterruptIn,
+        //     // _ => EndpointDirectedType::NotValid,
         // }
     }
 }

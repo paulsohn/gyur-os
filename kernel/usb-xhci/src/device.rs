@@ -109,15 +109,12 @@ where
 
     /// Read a config descriptor and following interfaces.
     /// return the config value.
-    fn on_config_desc_received<'b>(
+    fn on_config_desc_received(
         &mut self,
         buf: &[u8],
-        class_drivers: &RefCell<Vec<Box<dyn USBClass<B> + 'b, A>, A>>,
+        class_drivers: &RefCell<Vec<Box<dyn USBClass, A>, A>>,
         ep_configs: &RefCell<Vec<EndpointConfig, A>>,
-    ) -> u8
-    where
-        B: 'b
-    { // init phase 2
+    ) -> u8 { // init phase 2
         use crate::class::new_class_from_interface;
 
         let mut reader = DescriptorIterator::from_buf(buf);
@@ -131,7 +128,7 @@ where
 
         // read interfaces and make class drivers.
         while let Some(Descriptor::Interface(&if_desc)) = reader.next() {
-            if let Some(cls) = new_class_from_interface::<'b, B, L, A>(
+            if let Some(cls) = new_class_from_interface::<L, A>(
                 if_desc.b_interface_class,
                 if_desc.b_interface_sub_class,
                 if_desc.b_interface_protocol,
@@ -162,7 +159,7 @@ where
         //         // read interfaces and make class drivers.
         //         while let Some(desc) = reader.next() {
         //             if let Descriptor::Interface(&if_desc) = desc {
-        //                 if let Some(cls) = new_class::<'b, B, L, A>(
+        //                 if let Some(cls) = new_class::<L, A>(
         //                     if_desc.b_interface_class,
         //                     if_desc.b_interface_sub_class,
         //                     if_desc.b_interface_protocol,
@@ -189,7 +186,7 @@ where
         //         // use device class, subclass, protocol to make class driver.
         //         while let Some(desc) = reader.next() {
         //             if let Descriptor::Interface(&if_desc) = desc {
-        //                 if let Some(cls) = new_class::<'b, B, L, A>(
+        //                 if let Some(cls) = new_class::<L, A>(
         //                     self.device_desc.b_device_class,
         //                     self.device_desc.b_device_sub_class,
         //                     self.device_desc.b_device_protocol,
@@ -227,7 +224,7 @@ where
     pub fn on_endpoints_configured(
         &self,
         bus: &B,
-        class_drivers: &RefCell<Vec<Box<dyn USBClass<B>, A>, A>>,
+        class_drivers: &RefCell<Vec<Box<dyn USBClass, A>, A>>,
     ) {
         for cls in class_drivers.borrow_mut().iter_mut() {
             cls.on_endpoints_configured(bus);
@@ -247,18 +244,15 @@ where
         );
     }
 
-    pub fn on_control_completed<'b>(
+    pub fn on_control_completed(
         &mut self,
         bus: &B,
-        class_drivers: &RefCell<Vec<Box<dyn USBClass<B> + 'b, A>, A>>,
+        class_drivers: &RefCell<Vec<Box<dyn USBClass, A>, A>>,
         ep_configs: &RefCell<Vec<EndpointConfig, A>>,
         addr: EndpointAddress,
         req: SetupRequest,
         buf: &mut [u8],
-    )
-    where
-        B: 'b
-    {
+    ) {
         // all error handlings should be done on each phase methods.
 
         if !self.has_device_desc_received() { // phase 1.
@@ -311,7 +305,7 @@ where
     pub fn on_normal_completed(
         &mut self,
         bus: &B,
-        class_drivers: &RefCell<Vec<Box<dyn USBClass<B>, A>, A>>,
+        class_drivers: &RefCell<Vec<Box<dyn USBClass, A>, A>>,
         addr: EndpointAddress,
         buf: &mut [u8]
     ) {

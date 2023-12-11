@@ -1,0 +1,8 @@
+[package]
+name = "volatile_field"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+volatile = { version = "0.5.1", features = ["unstable"] }
+volatile_field_macros = { path = "./volatile_field_macros" }

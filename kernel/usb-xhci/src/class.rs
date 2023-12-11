@@ -1,7 +1,6 @@
 extern crate alloc;
 
 use core::alloc::Allocator;
-use core::marker::PhantomData;
 // use alloc::alloc::Global;
 use alloc::boxed::Box;
 
@@ -14,50 +13,38 @@ use crate::setup::{/* request_code, */ requests, SetupRequest};
 use crate::bus::USBBus;
 
 /// USB class driver.
-pub trait USBClass<B: USBBus> {
+pub trait USBClass {
     fn set_endpoint(&mut self, configs: &[EndpointConfig]);
-    fn on_endpoints_configured(&mut self, bus: &B);
-    fn on_control_completed(&mut self, bus: &B, addr: EndpointAddress, req: SetupRequest, buf: &mut [u8]); // should only process if the recent setup request matches with `req`
-    fn on_normal_completed(&mut self, bus: &B, addr: EndpointAddress, buf: &mut [u8]);
+    fn on_endpoints_configured(&mut self, bus: &dyn USBBus);
+    fn on_control_completed(&mut self, bus: &dyn USBBus, addr: EndpointAddress, req: SetupRequest, buf: &mut [u8]); // should only process if the recent setup request matches with `req`
+    fn on_normal_completed(&mut self, bus: &dyn USBBus, addr: EndpointAddress, buf: &mut [u8]);
 }
 
 /// temporary void class
-// impl<B: USBBus> USBClass<B> for () {
+// impl USBClass for () {
 //     fn set_endpoint(&mut self, _configs: &[EndpointConfig]) {}
-//     fn on_endpoints_configured(&mut self, _bus: &B) {}
-//     fn on_control_completed(&mut self, _bus: &B, _addr: EndpointAddress, _req: SetupRequest, _buf: &mut [u8]) {}
-//     fn on_normal_completed(&mut self, _bus: &B, _addr: EndpointAddress, _buf: &mut [u8]) {}
+//     fn on_endpoints_configured(&mut self, _bus: &dyn USBBus) {}
+//     fn on_control_completed(&mut self, _bus: &dyn USBBus, _addr: EndpointAddress, _req: SetupRequest, _buf: &mut [u8]) {}
+//     fn on_normal_completed(&mut self, _bus: &dyn USBBus, _addr: EndpointAddress, _buf: &mut [u8]) {}
 // }
 
-// pub struct USBCDCClass<B>
-// where
-//     B: USBBus,
-// {
+// pub struct USBCDCClass {
 //     ep_interrupt_in: EndpointAddress,
 //     ep_bulk_in: EndpointAddress,
 //     ep_bulk_out: EndpointAddress,
-
-//     _bus: PhantomData<B>,
 // }
 
-// impl<B> USBCDCClass<B>
-// where
-//     B: USBBus,
-// {
+// impl USBCDCClass {
 //     pub fn new() -> Self {
 //         Self {
 //             ep_interrupt_in: EndpointAddress::from_byte(0),
 //             ep_bulk_in: EndpointAddress::from_byte(0),
 //             ep_bulk_out: EndpointAddress::from_byte(0),
-//             _bus: PhantomData
 //         }
 //     }
 // }
 
-// impl<B> USBClass<B> for USBCDCClass<B>
-// where
-//     B: USBBus,
-// {
+// impl USBClass for USBCDCClass {
 //     fn set_endpoint(&mut self, configs: &[EndpointConfig]) {
 //         for cfg in configs.iter() {
 //             match cfg.ep_type_with_dir() {
@@ -75,24 +62,20 @@ pub trait USBClass<B: USBBus> {
 //         }
 //     }
 
-//     fn on_endpoints_configured(&mut self, _bus: &B) {
+//     fn on_endpoints_configured(&mut self, _bus: &dyn USBBus) {
 //         // pass
 //     }
 
-//     fn on_control_completed(&mut self, _bus: &B, _addr: EndpointAddress, _req: SetupRequest, _buf: &mut [u8]) {
+//     fn on_control_completed(&mut self, _bus: &dyn USBBus, _addr: EndpointAddress, _req: SetupRequest, _buf: &mut [u8]) {
 //         // pass
 //     }
 
-//     fn on_normal_completed(&mut self, _bus: &B, _addr: EndpointAddress, _buf: &mut [u8]) {
+//     fn on_normal_completed(&mut self, _bus: &dyn USBBus, _addr: EndpointAddress, _buf: &mut [u8]) {
 //         todo!("Send Serial, Receive Serial, Set Line Coding..");
 //     }
 // }
 
-pub struct USBHIDClass<B, P>
-where
-    B: USBBus,
-    P: Packet,
-{
+pub struct USBHIDClass<P: Packet> {
     ep_interrupt_in: EndpointAddress,
     ep_interrupt_out: EndpointAddress,
 
@@ -104,14 +87,9 @@ where
     prev: P::Info,
 
     listener: fn(P::Report),
-    _marker: PhantomData<B>,
 }
 
-impl<B, P> USBHIDClass<B, P>
-where
-    B: USBBus,
-    P: Packet,
-{
+impl<P: Packet> USBHIDClass<P> {
     pub fn new(
         if_index: u16,
         listener: fn(P::Report),
@@ -128,7 +106,6 @@ where
             prev: Default::default(),
 
             listener,
-            _marker: PhantomData,
         }
     }
 
@@ -139,11 +116,7 @@ where
     }
 }
 
-impl<B, P> USBClass<B> for USBHIDClass<B, P>
-where
-    B: USBBus,
-    P: Packet,
-{
+impl<P: Packet> USBClass for USBHIDClass<P> {
     fn set_endpoint(&mut self, configs: &[EndpointConfig]) {
         for cfg in configs.iter() {
             match cfg.ep_type_with_dir() {
@@ -158,7 +131,7 @@ where
         }
     }
 
-    fn on_endpoints_configured(&mut self, bus: &B) {
+    fn on_endpoints_configured(&mut self, bus: &dyn USBBus) {
         let req = requests::set_protocol(self.if_index);
 
         bus.control_out(
@@ -172,7 +145,7 @@ where
         self.last_req = req;
     }
 
-    fn on_control_completed(&mut self, bus: &B, _addr: EndpointAddress, req: SetupRequest, _buf: &mut [u8]) {
+    fn on_control_completed(&mut self, bus: &dyn USBBus, _addr: EndpointAddress, req: SetupRequest, _buf: &mut [u8]) {
         if self.last_req != req { return; }
         self.last_req = Default::default();
 
@@ -182,7 +155,7 @@ where
         );
     }
 
-    fn on_normal_completed(&mut self, bus: &B, addr: EndpointAddress, _buf: &mut [u8]) {
+    fn on_normal_completed(&mut self, bus: &dyn USBBus, addr: EndpointAddress, _buf: &mut [u8]) {
         if addr != self.ep_interrupt_in { return; }
         // if !addr.is_in() { return; }
 
@@ -297,13 +270,12 @@ pub trait SupportedClassListeners: 'static {
     fn mouse() -> fn(MouseReport);
 }
 
-pub fn new_class_from_interface<'b, B, L, A /* = Global */>(
+pub fn new_class_from_interface<L, A /* = Global */>(
     base: u8, sub: u8, protocol: u8,
     index: u8,
     allocator: A
-) -> Option<Box<dyn USBClass<B> + 'b, A>>
+) -> Option<Box<dyn USBClass, A>>
 where
-    B: USBBus + 'b,
     A: Allocator,
     L: SupportedClassListeners,
 {
@@ -314,7 +286,7 @@ where
         // },
         (3, 1, 1) => { // keyboard
             Some(Box::new_in(
-                USBHIDClass::<B, KeyboardPacket>::new(
+                USBHIDClass::<KeyboardPacket>::new(
                     index as u16,
                     L::keyboard()
                 ),
@@ -323,7 +295,7 @@ where
         },
         (3, 1, 2) => { // mouse
             Some(Box::new_in(
-                USBHIDClass::<B, MousePacket>::new(
+                USBHIDClass::<MousePacket>::new(
                     index as u16,
                     L::mouse()
                 ),

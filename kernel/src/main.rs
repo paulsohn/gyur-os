@@ -44,7 +44,7 @@ impl SupportedClassListeners for Listeners {
     }
 }
 
-fn setup_xhc_controller() -> Option<Controller<Listeners>> {
+fn setup_xhc_controller() -> Option<Controller<'static, Listeners>> {
     use kernel::pci::Devices;
     let devices = Devices::scan().unwrap();
     for dev in devices.as_slice() {
@@ -52,26 +52,26 @@ fn setup_xhc_controller() -> Option<Controller<Listeners>> {
     }
 
     let mmio_base = devices.as_slice().iter().find(|&dev| {
-        dev.class_code().match_base_sub_interface(0x0c, 0x03, 0x30) && dev.vendor_id() == 0x8086
-    }).and_then(|xdev| {
-        log::debug!("An Intel xHC has been detected.");
+    //     dev.class_code().match_base_sub_interface(0x0c, 0x03, 0x30) && dev.vendor_id() == 0x8086
+    // }).and_then(|xdev| {
+    //     log::debug!("An Intel xHC has been detected.");
 
-        let switch_ehci_to_xhci = devices.as_slice().iter().find(|&dev| {
-            dev.class_code().match_base_sub_interface(0x0c, 0x03, 0x20)
-        }).is_some();
+    //     let switch_ehci_to_xhci = devices.as_slice().iter().find(|&dev| {
+    //         dev.class_code().match_base_sub_interface(0x0c, 0x03, 0x20)
+    //     }).is_some();
 
-        if switch_ehci_to_xhci {
-            // read and write `xdev`
-            xdev.read_write_offset(0xdc, 0xd8); // Superspeed Ports
-            xdev.read_write_offset(0xd4, 0xd0); // eHCi to xHCi ports
-            log::debug!("Switched eHCi to xHCi.");
-        }
+    //     if switch_ehci_to_xhci {
+    //         // read and write `xdev`
+    //         xdev.read_write_offset(0xdc, 0xd8); // Superspeed Ports
+    //         xdev.read_write_offset(0xd4, 0xd0); // eHCi to xHCi ports
+    //         log::debug!("Switched eHCi to xHCi.");
+    //     }
 
-        Some(xdev)
-    }).or_else(|| {
-        devices.as_slice().iter().find(|&dev| {
+    //     Some(xdev)
+    // }).or_else(|| {
+    //     devices.as_slice().iter().find(|&dev| {
             dev.class_code().match_base_sub_interface(0x0c, 0x03, 0x30)
-        })
+    //     })
     }).and_then(|xdev| {
         log::debug!("xHC has been found: {}.{}.{}.", xdev.bus(), xdev.slot_fun().0, xdev.slot_fun().1);
 

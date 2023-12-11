@@ -4,8 +4,8 @@ members = [
     "shared",
     "bootloader",
     "kernel",
-    "kernel/usb-xhci",
-    "kernel/accessor",
+    "kernel/volatile_field",
     "kernel/xhci",
+    "kernel/usb-xhci",
 ]
 resolver = "2"
