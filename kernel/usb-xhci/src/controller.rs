@@ -374,7 +374,7 @@ where
     }
 
     pub fn process_events(&mut self) {
-        if let Some(block) = self.ev_ring.pop() {
+        while let Some(block) = self.ev_ring.pop() {
             if let Ok(psc) = event::PortStatusChange::try_from(block) {
                 self.on_port_status_change(psc.port_id() as usize);
             } else if let Ok(te) = event::TransferEvent::try_from(block) {
@@ -440,7 +440,7 @@ where
     /// RW1C bits are protected on this function.
     /// 
     /// Panics when `i == 0`.
-    fn protected_update_portsc_at<F>(&mut self, i: usize, f: F)
+    fn protected_update_portsc_at<F>(&self, i: usize, f: F)
     where
         F: FnOnce(&mut PortStatusAndControlRegister)
     {
@@ -786,3 +786,9 @@ where
         }
     }
 }
+
+unsafe impl<L, A> Send for Controller<'_, L, A>
+where
+    A: Allocator + Clone + 'static,
+    L: SupportedClassListeners,
+{}

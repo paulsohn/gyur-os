@@ -7,14 +7,14 @@ description = "the kernel part of personal rust implementation of [Mikan OS](htt
 
 [dependencies]
 shared = { path = "../shared" }
+log = "0.4.20"
 
 x86_64 = "0.14.10"
 
 spin = "0.9.8"
 bit_field = "0.10.2"
-# packed_struct = { version = "0.10.1", features = [], default-features = false }
 heapless = "0.7.16"
 
+apic = { path = "./apic" }
 xhci = { path = "./xhci" }
 usb-xhci = { path = "./usb-xhci" }
-log = "0.4.20"

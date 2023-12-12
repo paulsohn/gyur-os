@@ -73,24 +73,24 @@ pub extern "sysv64" fn _start (
         frame_buffer_info
     );
 
-    log::info!("Hello, GYUR OS!");
+    // log::info!("Hello, GYUR OS!");
 
-    {
-        let mut screen_cell = globals::SCREEN.lock();
-        let screen = screen_cell.get_mut().unwrap();
+    // {
+    //     let mut screen_cell = globals::SCREEN.lock();
+    //     let screen = screen_cell.get_mut().unwrap();
 
-        screen.render_cursor();
-    }
+    //     screen.render_cursor();
+    // }
 
-    let mut xhc = setup_xhc_controller().unwrap();
-    xhc.run();
-    xhc.reconfigure_port();
+    // let mut xhc = setup_xhc_controller().unwrap();
+    // xhc.run();
+    // xhc.reconfigure_port();
 
-    loop {
-        xhc.process_events();
-    }
+    // loop {
+    //     xhc.process_events();
+    // }
 
-    // halt();
+    halt();
 }
 
 #[panic_handler]

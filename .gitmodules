@@ -1,3 +1,6 @@
 [submodule "kernel/xhci"]
 	path = kernel/xhci
 	url = https://github.com/paulsohn/xhci
+[submodule "kernel/apic"]
+	path = kernel/apic
+	url = https://github.com/paulsohn/apic.git

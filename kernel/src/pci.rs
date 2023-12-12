@@ -1,6 +1,10 @@
 // @TODO: replace this module with `pci_types` (when the crate is more ready)
 
-use crate::{Error, Result};
+pub enum Error {
+    Full,
+    Empty
+}
+pub type Result<T = ()> = core::result::Result<T, Error>;
 
 use x86_64::instructions::port::Port;
 // use packed_struct::prelude::*; // @TODO : convert ClassCode into packed struct
