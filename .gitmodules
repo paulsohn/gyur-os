@@ -4,3 +4,6 @@
 [submodule "kernel/apic"]
 	path = kernel/apic
 	url = https://github.com/paulsohn/apic.git
+[submodule "kernel/pci_types"]
+	path = kernel/pci_types
+	url = https://github.com/paulsohn/pci_types.git

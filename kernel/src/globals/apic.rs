@@ -1,5 +1,6 @@
 // https://wiki.osdev.org/APIC
 
+use core::ptr::NonNull;
 use core::ops::{Deref, DerefMut};
 use spin::lazy::Lazy as LazyLock;
 
@@ -19,7 +20,9 @@ pub static APIC_BASE: LazyLock<Apic> = LazyLock::new(|| unsafe {
 pub struct Apic(pub ApicBase);
 impl Apic {
     pub unsafe fn new(base_addr: usize) -> Self {
-        Self(ApicBase::new(base_addr as *mut _))
+        Self(ApicBase::new(
+            NonNull::new(base_addr as *mut _).unwrap()
+        ))
     }
 }
 impl Deref for Apic {

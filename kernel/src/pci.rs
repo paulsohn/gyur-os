@@ -1,4 +1,52 @@
-// @TODO: replace this module with `pci_types` (when the crate is more ready)
+use bit_field::BitField;
+use x86_64::instructions::port::Port;
+
+use pci_types::{
+    PciAddress,
+    ConfigRegionAccess,
+};
+
+pub struct X64Access;
+impl X64Access {
+    const CFG_ADDR_PORT_NO: u16 = 0x0cf8;
+    const CFG_DATA_PORT_NO: u16 = 0x0cfc;
+    const fn cfg_addr_port() -> Port<u32> {
+        Port::new(Self::CFG_ADDR_PORT_NO)
+    }
+    const fn cfg_data_port() -> Port<u32> {
+        Port::new(Self::CFG_DATA_PORT_NO)
+    }
+
+    fn addr_value(address: PciAddress, offset: u16) -> u32 {
+        assert!(offset % 4 == 0);
+        assert!(offset <= u8::MAX as u16, "u16 offsets are unsupported");
+        *0u32.set_bit(31, true) // enable bit
+            .set_bits(16..=23, address.bus() as u32)
+            .set_bits(11..=15, address.device() as u32)
+            .set_bits(8..=10, address.function() as u32)
+            .set_bits(0..=7, offset as u32)
+    }
+}
+impl ConfigRegionAccess for X64Access {
+    unsafe fn read(&self, address: PciAddress, offset: u16) -> u32 {
+        Self::cfg_addr_port().write(
+            Self::addr_value(address, offset)
+        );
+        Self::cfg_data_port().read()
+    }
+
+    unsafe fn write(&self, address: PciAddress, offset: u16, value: u32) {
+        Self::cfg_addr_port().write(
+            Self::addr_value(address, offset)
+        );
+        Self::cfg_data_port().write(value);
+    }
+
+    fn function_exists(&self, _address: PciAddress) -> bool {
+        unimplemented!();
+    }
+}
+
 
 pub enum Error {
     Full,
@@ -6,7 +54,7 @@ pub enum Error {
 }
 pub type Result<T = ()> = core::result::Result<T, Error>;
 
-use x86_64::instructions::port::Port;
+
 // use packed_struct::prelude::*; // @TODO : convert ClassCode into packed struct
 
 /// PCI class code (base, sub, interface)
@@ -172,6 +220,10 @@ impl Device {
         (self.header_type() & 0x80) == 0
     }
 
+    pub fn cap_addr(&self) -> u8 {
+        (self.read_offset(0x34) & 0xff) as u8
+    }
+
     /// read BAR(Base Address Register)
     /// currently this is only intended to read BAR0.
     #[inline]
@@ -204,16 +256,21 @@ impl Device {
     }
 
 }
+// impl Device {
+//     pub fn config_msi_fixed_dst(&self){
+
+//     }
+// }
 
 const DEVICE_CAP: usize = 32;
 
 /// array of found devices which can hold up to `DEVICE_CAP` devices.
-pub struct Devices {
-    store: [Device; DEVICE_CAP],
+pub struct Devices<const CAP: usize = 32> {
+    store: [Device; CAP],
     count: usize,
 }
 
-impl Devices {
+impl<const CAP: usize> Devices<CAP> {
     /// get a slice for devices.
     pub fn as_slice(&self) -> &[Device] {
         &self.store[..self.count]
@@ -221,7 +278,7 @@ impl Devices {
 
     /// scan devices and create new device store.
     pub fn scan() -> Option<Self> {
-        let mut devices = Self { store: [Device::default(); 32], count: 0 };
+        let mut devices = Self { store: [Device::default(); CAP], count: 0 };
         if devices.scan_all().is_ok() {
             Some(devices)
         } else { None }

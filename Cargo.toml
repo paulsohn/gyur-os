@@ -5,6 +5,8 @@ members = [
     "bootloader",
     "kernel",
     "kernel/volatile_field",
+    "kernel/pci_types",
+    "kernel/apic",
     "kernel/xhci",
     "kernel/usb-xhci",
 ]

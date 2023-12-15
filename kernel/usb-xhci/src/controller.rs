@@ -791,4 +791,4 @@ unsafe impl<L, A> Send for Controller<'_, L, A>
 where
     A: Allocator + Clone + 'static,
     L: SupportedClassListeners,
-{}
+{} // todo: remove unsafe `Send` impl!
