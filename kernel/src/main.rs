@@ -8,20 +8,9 @@ use core::panic::PanicInfo;
 
 use shared::frame_buffer::FrameBuffer;
 use kernel::{
-    // console::Console,
-
-    allocator::global_allocator,
-
     globals,
     // console_print,
     console_println
-};
-
-use usb_xhci::controller::Controller;
-use usb_xhci::class::{
-    KeyboardReport,
-    MouseReport,
-    SupportedClassListeners
 };
 
 #[no_mangle]
