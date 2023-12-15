@@ -8,7 +8,7 @@ use x86_64::structures::idt::{
     InterruptStackFrame
 };
 
-const IDT_XHCI: usize = 0x40;
+pub const IDT_XHCI: usize = 0x40;
 // const IDT_LAPIC_TIMER: usize = 0x41;
 
 static IDT: LazyLock<InterruptDescriptorTable> = LazyLock::new(|| {

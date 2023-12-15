@@ -17,12 +17,11 @@ pub static APIC_BASE: LazyLock<Apic> = LazyLock::new(|| unsafe {
 // });
 
 /// An `ApicBase` wrapper just here to mark `ApicBase` sync.
-pub struct Apic(pub ApicBase);
+pub struct Apic(ApicBase);
 impl Apic {
     pub unsafe fn new(base_addr: usize) -> Self {
-        Self(ApicBase::new(
-            NonNull::new(base_addr as *mut _).unwrap()
-        ))
+        let addr = NonNull::new(base_addr as *mut _).unwrap();
+        Self(ApicBase::new(addr))
     }
 }
 impl Deref for Apic {

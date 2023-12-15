@@ -9,20 +9,32 @@ use crate::xhci::{
 use core::cell::OnceCell;
 use spin::mutex::Mutex;
 
+use super::interrupts::IDT_XHCI;
+
 pub static XHC: Mutex<OnceCell<Controller<'static, Listeners>>> = Mutex::new(OnceCell::new());
 
 #[allow(unused_must_use)]
 pub fn init() {
-    let xhci_dev = xhci::get_xhci_dev().unwrap();
+    let xhci_ep = xhci::get_xhci_ep().unwrap();
 
-    // Configure MSI
+    // Enable MSI.
+    let msi = xhci::find_msi_cap(&xhci_ep).unwrap();
 
-    let xhci_mmio_base = xhci_dev.bar0().mm().unwrap();
+    let apic = &*super::APIC_BASE;
+    xhci::cfg_msi_fixed_dst(
+        msi,
+        apic.base_addr,
+        apic.id().read().id(), // bootstrap processor LAPIC ID
+        IDT_XHCI as u8,
+    );
 
+    // Setup xhc controller.
+    let xhci_mmio_base = xhci::read_mmio_base(&xhci_ep).unwrap();
     XHC.lock().get_or_init(|| {
         xhci::setup_xhc_controller(xhci_mmio_base).unwrap()
     });
 }
+
 pub struct Listeners;
 impl SupportedClassListeners for Listeners {
     fn keyboard() -> fn(class::KeyboardReport) {
