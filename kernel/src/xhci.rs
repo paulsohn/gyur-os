@@ -8,7 +8,7 @@ pub use usb_xhci::class::{
 };
 
 pub fn get_xhci_dev() -> Option<Device> {
-    let devices = Devices::scan().unwrap();
+    let devices = Devices::<32>::scan().unwrap();
     // for dev in devices.as_slice() {
     //     log::debug!("{}.{}.{}.: vend {:04x}, class {:06x}, head {:02x}", dev.bus(), dev.slot_fun().0, dev.slot_fun().1, dev.vendor_id(), dev.class_code().code(), dev.header_type());
     // }
