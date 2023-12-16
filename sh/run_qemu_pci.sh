@@ -4,5 +4,7 @@ qemu-system-x86_64 \
     -device nec-usb-xhci,id=xhci \
     -device usb-mouse,bus=xhci.0 \
     -device usb-kbd,bus=xhci.0 \
+    -trace "pci_cfg_read" \
+    -trace "pci_cfg_write" \
     -monitor stdio \
     -hda disk.img

@@ -17,9 +17,11 @@ pub fn init(
     console::init();
     logger::init();
     xhci::init();
+
+    interrupts::init();
 }
 
-pub use apic::APIC_BASE;
+pub use apic::APIC;
 
 pub use screen::SCREEN;
 pub use console::CONSOLE;

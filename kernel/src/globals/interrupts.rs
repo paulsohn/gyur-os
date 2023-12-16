@@ -22,8 +22,7 @@ pub fn init(){
 }
 
 extern "x86-interrupt" fn xhci_handler(stack_frame: InterruptStackFrame) {
-    // todo: make `xhc` be static!
     super::XHC.lock().get_mut().unwrap()
         .process_events();
-    super::APIC_BASE.end_of_interrupt().signal();
+    super::APIC.end_of_interrupt().signal();
 }

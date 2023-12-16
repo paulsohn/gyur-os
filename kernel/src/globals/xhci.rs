@@ -20,7 +20,8 @@ pub fn init() {
     // Enable MSI.
     let msi = xhci::find_msi_cap(&xhci_ep).unwrap();
 
-    let apic = &*super::APIC_BASE;
+    let apic = &*super::APIC;
+    log::info!("base {:p} / bsp id {}", apic.base_addr.as_ptr(), apic.id().read().id());
     xhci::cfg_msi_fixed_dst(
         msi,
         apic.base_addr,

@@ -7,9 +7,10 @@ use spin::lazy::Lazy as LazyLock;
 use x86_64::registers::model_specific::Msr;
 use apic::ApicBase;
 
-/// APIC Memory-mapped Base Address.
-pub static APIC_BASE: LazyLock<Apic> = LazyLock::new(|| unsafe {
-    Apic::new(Msr::new(0x1B).read() as usize)
+/// APIC Memory-mapped Access.
+pub static APIC: LazyLock<Apic> = LazyLock::new(|| unsafe {
+    let base_addr = Msr::new(0x1B).read() & 0xfffff000;
+    Apic::new(base_addr as usize)
 });
 // /// The BootStrap Processor Local APIC ID
 // pub static BSP_LAPIC_ID: LazyLock<u8> = LazyLock::new(|| {
