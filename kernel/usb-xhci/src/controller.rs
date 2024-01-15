@@ -326,19 +326,18 @@ where
             // The primary interrupter.
             let interrupter = regs.interrupter_register_set_array.index(0);
 
+            let mut ev_ring = EventRing::new(interrupter, 32, allocator.clone());
+            // the event ring is already registered on construction
+
             // enable interrupt for primary interrupter
-            interrupter.fields().iman().update(|mut iman| {
-                *iman.clear_interrupt_pending() // RW1C, this writes 1 to clear
-                    .set_interrupt_enable()
-            });
+            ev_ring.enable_interrupt();
 
             // enable interrupt for controller
             op_usbcmd.update(|mut usbcmd| {
                 *usbcmd.set_interrupter_enable()
             });
 
-            EventRing::new(interrupter, 32, allocator.clone())
-            // the event ring is already registered on construction
+            ev_ring
         };
 
         Self {

@@ -9,28 +9,31 @@ use crate::xhci::{
 use core::cell::OnceCell;
 use spin::mutex::Mutex;
 
-use super::interrupts::IDT_XHCI;
+use super::interrupts::IDT_VEC_XHCI;
 
 pub static XHC: Mutex<OnceCell<Controller<'static, Listeners>>> = Mutex::new(OnceCell::new());
 
 #[allow(unused_must_use)]
 pub fn init() {
-    let xhci_ep = xhci::get_xhci_ep().unwrap();
-
-    // Enable MSI.
-    let msi = xhci::find_msi_cap(&xhci_ep).unwrap();
-
     let apic = &*super::APIC;
     log::info!("base {:p} / bsp id {}", apic.base_addr.as_ptr(), apic.id().read().id());
+
+    let xhci_ep = xhci::get_xhci_ep_acc().unwrap();
+
+    // Enable MSI.
+    let msi_cap_header_acc = xhci::find_msi_cap_acc(&xhci_ep).unwrap();
     xhci::cfg_msi_fixed_dst(
-        msi,
+        &msi_cap_header_acc,
         apic.base_addr,
         apic.id().read().id(), // bootstrap processor LAPIC ID
-        IDT_XHCI as u8,
+        IDT_VEC_XHCI as u8,
     );
 
     // Setup xhc controller.
     let xhci_mmio_base = xhci::read_mmio_base(&xhci_ep).unwrap();
+
+    log::info!("MMIO BASE {:x}", xhci_mmio_base);
+
     XHC.lock().get_or_init(|| {
         xhci::setup_xhc_controller(xhci_mmio_base).unwrap()
     });

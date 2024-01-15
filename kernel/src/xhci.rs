@@ -1,12 +1,16 @@
 use crate::pci::{
     scan_all_brute,
-    // PciAddress,
-    X64Access,
+    // PciAddress,    
+    LegacyPortAccessMethod,
+    // DwordAccessMethod,
+    DwordAccessor, AccessorTrait,
     PciHeader, EndpointHeader,
     Bar,
-    capability::{
-        PciCapability,
-        MsiCapability,
+    capability::CapabilityHeader,
+    capability::msi::{
+        MsiCapabilityInfo,
+        // MessageControl,
+        MessageData,
         MultipleMessageSupport,
         TriggerMode,
     },
@@ -14,6 +18,7 @@ use crate::pci::{
         DeviceType,
         UsbType,
     },
+    acc_map_field,
 };
 use crate::allocator::global_allocator;
 
@@ -25,17 +30,20 @@ pub use usb_xhci::class::{
     SupportedClassListeners
 };
 
-pub fn get_xhci_ep() -> Option<EndpointHeader> {
-    scan_all_brute().find(|addr| {
-        let (_, base, sub, ifce) = PciHeader::new(*addr).revision_and_class(&X64Access);
+pub fn get_xhci_ep_acc<'a>()
+-> Option<impl AccessorTrait<'a, LegacyPortAccessMethod, EndpointHeader>>
+{
+    scan_all_brute()
+        .find(|&addr| {
+            let accessor = DwordAccessor::<'_, _, PciHeader>::new(addr, 0, LegacyPortAccessMethod);
 
-        DeviceType::from((base, sub)) == DeviceType::UsbController
-        && UsbType::try_from(ifce).ok() == Some(UsbType::Xhci)
-    }).and_then(|addr| {
-        EndpointHeader::from_header(
-            PciHeader::new(addr), &X64Access
-        )
-    })
+            let revcc = acc_map_field!(accessor.revcc).read();
+
+            revcc.device_type() == DeviceType::UsbController
+            && UsbType::try_from(revcc.interface).ok() == Some(UsbType::Xhci)
+        }).map(|addr| {
+            DwordAccessor::<'_, _, EndpointHeader>::new(addr, 0, LegacyPortAccessMethod)
+        })
 
     // let devices = Devices::<32>::scan().unwrap();
     // for dev in devices.as_slice() {
@@ -47,16 +55,22 @@ pub fn get_xhci_ep() -> Option<EndpointHeader> {
     // }).map(|dev| *dev)
 }
 
-pub fn find_msi_cap(ep: &EndpointHeader) -> Option<MsiCapability> {
-    ep.capabilities(&X64Access).find_map(|cap| {
-        if let PciCapability::Msi(msi) = cap {
-            Some(msi)
-        } else { None }
-    })
+pub fn find_msi_cap_acc<'a>(
+    ep_acc: &impl AccessorTrait<'a, LegacyPortAccessMethod, EndpointHeader>
+) -> Option<impl AccessorTrait<'a, LegacyPortAccessMethod, CapabilityHeader>>
+{
+    EndpointHeader::capabilities(ep_acc)
+        .find(|cap| {
+            let c: CapabilityHeader = cap.read();
+
+            log::info!("Cap type {}, offset {}", c.id, cap.start_offset());
+
+            MsiCapabilityInfo::msi_cap_type(cap) != 0
+        })
 }
 
-pub fn cfg_msi_fixed_dst(
-    msi: MsiCapability,
+pub fn cfg_msi_fixed_dst<'a>(
+    msi_cap_header_acc: &impl AccessorTrait<'a, LegacyPortAccessMethod, CapabilityHeader>,
     apic_base: NonNull<u8>,
     apic_id: u8,
     // we have `trigger_mode` here, but we will use `TriggerMode::Level`.
@@ -65,24 +79,28 @@ pub fn cfg_msi_fixed_dst(
     // num_vec_exp: MultipleMessageSupport,
     // we have MultipleMessageSupport, but we will use `Int1`(= 0)
 ) {
-    // todo : this involves too many reads & writes. just save them and flush once!
-
-    msi.set_multiple_message_enable(MultipleMessageSupport::Int1, &X64Access);
-
-    let apic_base = apic_base.as_ptr() as usize;
-
-    msi.set_message_info(
-        (apic_base as u32) | ((apic_id as u32) << 12),
-        vector,
-        TriggerMode::LevelAssert,
-        &X64Access,
+    MsiCapabilityInfo::update_info(
+        msi_cap_header_acc,
+        |mut info| {
+            {
+                let control = &mut info.header.extension;
+                control.set_msi_enable();
+                control.set_multiple_message_enable(
+                    MultipleMessageSupport::Int1
+                );
+            }
+            info.addr[0] = (apic_base.as_ptr() as usize as u32) | ((apic_id as u32) << 12);
+            info.data = MessageData::new(vector, TriggerMode::LevelAssert);
+            info
+        }
     );
-
-    msi.set_enabled(true, &X64Access);
 }
 
-pub fn read_mmio_base(ep: &EndpointHeader) -> Option<u64> {
-    match ep.bar(0, &X64Access) {
+pub fn read_mmio_base<'a>(
+    ep_acc: &impl AccessorTrait<'a, LegacyPortAccessMethod, EndpointHeader>
+) -> Option<u64> {
+    // match EndpointHeader::bar(ep_acc, 0) {
+    match EndpointHeader::bar_base_only(ep_acc, 0) {
         Some(Bar::Memory64 { address, .. }) => Some(address),
         Some(Bar::Memory32 { address, .. }) => Some(address as u64),
         _ => None

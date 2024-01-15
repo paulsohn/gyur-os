@@ -31,9 +31,23 @@ pub extern "sysv64" fn _start (
     //     screen.render_cursor();
     // }
 
-    // let mut xhc = globals::XHC.lock().get().unwrap();
+    // x86_64::instructions::interrupts::int3();
+
+    // let mut xhc_lock = globals::XHC.lock();
+    // let xhc = xhc_lock.get_mut().unwrap();
     // loop {
-    //     xhc.process_events();
+    //     // xhc.process_events();
+    //     unsafe {
+    //         core::arch::asm!(
+    //             "int 0x40",
+    //         );
+    //     }
+    // }
+
+    // log::info!("It works!");
+
+    // unsafe {
+    //     core::arch::asm!("int 0x40");
     // }
 
     halt();

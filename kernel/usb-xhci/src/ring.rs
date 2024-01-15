@@ -368,6 +368,14 @@ where
         self.erst.len() > 0
     }
 
+    /// Enable interrupt from the interrupter.
+    pub fn enable_interrupt(&mut self) {
+        self.interrupter.fields().iman().update(|mut iman| {
+            *iman.clear_interrupt_pending() // RW1C, this writes 1 to clear
+                .set_interrupt_enable()
+        });
+    }
+
     /// Set event ring segment index and dequeue pointer.
     fn set_erdp(&mut self, seg_idx: u8, dequeue_pointer: u64) {
         self.interrupter.fields().erdp().update(|mut erdp| {
