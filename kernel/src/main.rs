@@ -24,33 +24,15 @@ pub extern "sysv64" fn _start (
 
     // log::info!("Hello, GYUR OS!");
 
-    // {
-    //     let mut screen_cell = globals::SCREEN.lock();
-    //     let screen = screen_cell.get_mut().unwrap();
-
-    //     screen.render_cursor();
-    // }
-
-    // x86_64::instructions::interrupts::int3();
-
-    // let mut xhc_lock = globals::XHC.lock();
-    // let xhc = xhc_lock.get_mut().unwrap();
-    // loop {
-    //     // xhc.process_events();
-    //     unsafe {
-    //         core::arch::asm!(
-    //             "int 0x40",
-    //         );
-    //     }
-    // }
-
-    // log::info!("It works!");
-
-    // unsafe {
-    //     core::arch::asm!("int 0x40");
-    // }
-
-    halt();
+    loop {
+        match globals::MSG_QUEUE.dequeue() {
+            Some(kernel::message::Message::XHCIInterrupt) => {
+                globals::XHC.lock().get_mut().unwrap()
+                    .process_events();
+            },
+            None => halt(),
+        }
+    }
 }
 
 #[panic_handler]
@@ -59,9 +41,9 @@ fn panic_handler(info: &PanicInfo) -> ! {
     unsafe{ core::arch::asm!("mov r11, 0xDEAD"); }
 
     console_println!("{}", info);
-    halt()
+    loop { halt() }
 }
 
-fn halt() -> ! {
-    loop{ x86_64::instructions::hlt(); }
+fn halt() { // should be `!` return type, but this doesn't seem to implement that..
+    x86_64::instructions::hlt();
 }

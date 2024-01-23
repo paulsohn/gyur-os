@@ -15,6 +15,9 @@ pub mod cursor;
 
 pub mod pci;
 pub mod xhci;
+
+pub mod message;
+
 pub mod allocator;
 
 pub mod globals;

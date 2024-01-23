@@ -6,6 +6,7 @@ pub mod console;
 pub mod logger;
 pub mod xhci;
 pub mod interrupts;
+pub mod message;
 
 use shared::frame_buffer::FrameBuffer;
 
@@ -28,3 +29,5 @@ pub use apic::APIC;
 pub use screen::SCREEN;
 pub use console::CONSOLE;
 pub use xhci::XHC;
+
+pub use message::MSG_QUEUE;

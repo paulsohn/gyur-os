@@ -13,7 +13,7 @@ x86_64 = "0.14.10"
 
 spin = "0.9.8"
 bit_field = "0.10.2"
-heapless = "0.7.16"
+heapless = { version = "0.8.0", features = ["portable-atomic"] }
 itertools = { version = "0.12.0", default-features = false }
 
 pci_types = { path = "./pci_types" }

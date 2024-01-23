@@ -1,5 +1,5 @@
 
-use super::{APIC, XHC};
+use super::{APIC, MSG_QUEUE};
 
 use x86_64::structures::idt::{
     InterruptDescriptorTable,
@@ -29,12 +29,11 @@ extern "x86-interrupt" fn breakpoint_handler(stack_frame: InterruptStackFrame) {
     log::info!("{:#?}", stack_frame);
 }
 
-extern "x86-interrupt" fn xhci_handler(stack_frame: InterruptStackFrame) {
-    // log::info!("xhci handler invoked");
-    {
-        XHC.lock().get_mut().unwrap()
-            .process_events();
-    }
+extern "x86-interrupt" fn xhci_handler(_stack_frame: InterruptStackFrame) {
+    MSG_QUEUE.enqueue(
+        crate::message::Message::XHCIInterrupt
+    )
+        .expect("Message Queue Full");
 
     APIC.end_of_interrupt().signal();
 }
