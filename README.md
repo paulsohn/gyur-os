@@ -39,7 +39,9 @@ After build, run `./sh/run_qemu.sh` for executing QEMU.
     * Ongoing contribution to related open source crates ([accessor](https://github.com/toku-sa-n/accessor) and [xhci](https://github.com/rust-osdev/xhci))
     * Debugging threads: [#158](https://github.com/uchan-nos/os-from-zero/issues/158) and [#159](https://github.com/uchan-nos/os-from-zero/issues/159)
   * Other implementations
-- [ ] Day 07
+- [x] Day 07A '24.01.23.
+  * Interrupt-based event handling.
+- [ ] Day 07B '24.01.xx.
   * ???
 
 ...and so on.
