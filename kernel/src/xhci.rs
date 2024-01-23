@@ -40,15 +40,10 @@ pub fn get_xhci_ep_acc<'a>()
             let revcc = acc_map_field!(accessor.revcc).read();
 
             revcc.device_type() == DeviceType::UsbController
-            && UsbType::try_from(revcc.interface).ok() == Some(UsbType::Xhci)
+            && UsbType::try_from(revcc.interface) == Ok(UsbType::Xhci)
         }).map(|addr| {
             DwordAccessor::<'_, _, EndpointHeader>::new(addr, 0, LegacyPortAccessMethod)
         })
-
-    // let devices = Devices::<32>::scan().unwrap();
-    // for dev in devices.as_slice() {
-    //     log::debug!("{}.{}.{}.: vend {:04x}, class {:06x}, head {:02x}", dev.bus(), dev.slot_fun().0, dev.slot_fun().1, dev.vendor_id(), dev.class_code().code(), dev.header_type());
-    // }
 
     // devices.as_slice().iter().find(|&dev| {
     //     dev.class_code().match_base_sub_interface(0x0c, 0x03, 0x30)

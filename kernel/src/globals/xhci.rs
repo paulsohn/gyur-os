@@ -18,10 +18,10 @@ pub fn init() {
     let apic = &*super::APIC;
     log::info!("base {:p} / bsp id {}", apic.base_addr.as_ptr(), apic.id().read().id());
 
-    let xhci_ep = xhci::get_xhci_ep_acc().unwrap();
+    let xhci_ep_acc = xhci::get_xhci_ep_acc().unwrap();
 
     // Enable MSI.
-    let msi_cap_header_acc = xhci::find_msi_cap_acc(&xhci_ep).unwrap();
+    let msi_cap_header_acc = xhci::find_msi_cap_acc(&xhci_ep_acc).unwrap();
     xhci::cfg_msi_fixed_dst(
         &msi_cap_header_acc,
         apic.base_addr,
@@ -30,10 +30,7 @@ pub fn init() {
     );
 
     // Setup xhc controller.
-    let xhci_mmio_base = xhci::read_mmio_base(&xhci_ep).unwrap();
-
-    log::info!("MMIO BASE {:x}", xhci_mmio_base);
-
+    let xhci_mmio_base = xhci::read_mmio_base(&xhci_ep_acc).unwrap();
     XHC.lock().get_or_init(|| {
         xhci::setup_xhc_controller(xhci_mmio_base).unwrap()
     });

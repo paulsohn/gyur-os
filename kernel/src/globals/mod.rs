@@ -16,9 +16,11 @@ pub fn init(
     screen::init(frame_buffer);
     console::init();
     logger::init();
-    
-    xhci::init();
+
     interrupts::init(); // load IDT first. actuall interrupts should occur AFTER xhci controller is set.
+    xhci::init();
+
+    x86_64::instructions::interrupts::enable();
 }
 
 pub use apic::APIC;
