@@ -39,10 +39,12 @@ After build, run `./sh/run_qemu.sh` for executing QEMU.
     * Ongoing contribution to related open source crates ([accessor](https://github.com/toku-sa-n/accessor) and [xhci](https://github.com/rust-osdev/xhci))
     * Debugging threads: [#158](https://github.com/uchan-nos/os-from-zero/issues/158) and [#159](https://github.com/uchan-nos/os-from-zero/issues/159)
   * Other implementations
-- [x] Day 07A '24.01.23.
+- [x] Day 07A '24.01.21.
   * Interrupt-based event handling.
-- [ ] Day 07B '24.01.xx.
-  * ???
+- [x] Day 07B '24.01.23.
+  * Message queue for kernel main loop.
+  * Used `heapless::mpmc::MpMcQueue` for the event queue.
+    * Seems a bit slow. Maybe we should find an alternative?
 
 ...and so on.
 

@@ -25,6 +25,10 @@ pub extern "sysv64" fn _start (
     // log::info!("Hello, GYUR OS!");
 
     loop {
+        // Dequeuing should be occured in critical section
+        // and no interrupts should happen during it.
+        // We are using lock-free MPMC queue, but in general situations, `x86_64::instructions::interrupts::disable();` and `x86_64::instructions::interrupts::enable()` should wrap this dequeueing.
+
         match globals::MSG_QUEUE.dequeue() {
             Some(kernel::message::Message::XHCIInterrupt) => {
                 globals::XHC.lock().get_mut().unwrap()
