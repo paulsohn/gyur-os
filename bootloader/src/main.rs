@@ -7,6 +7,10 @@ extern crate uefi_services;
 
 extern crate shared;
 
+// TODO: remove direct `uefi` dependency, just re-export it inside `shared` package.
+
+// TODO: specify FFI-safe layout for Memory Map.
+
 use uefi::data_types::{Char16, CStr16};
 use uefi::prelude::*;
 use uefi::table::boot;
@@ -28,8 +32,12 @@ use core::mem::size_of;
 use core::fmt::Write;
 // use core::arch::asm;
 
-use bootloader::ArrayWriter;
+// use bootloader::ArrayWriter;
+
 use shared::frame_buffer::FrameBuffer;
+use shared::memory_map::MemoryMap;
+
+static mut MMAP_BUFFER: [u8; 0x4000] = [0u8; 0x4000]; // 16KiB
 
 #[inline]
 fn uefi_boot(image_handle: uefi::Handle, system_table: &mut SystemTable<Boot>)
@@ -59,25 +67,8 @@ fn uefi_boot(image_handle: uefi::Handle, system_table: &mut SystemTable<Boot>)
     };
 
     // acquire memory map for later use
-    let mut mmap_buffer = [0u8; 0x4000]; // 16KiB
-    let mmap = system_table.boot_services().memory_map(&mut mmap_buffer)?;
-
-    // write memory map info into `/mmap.csv`.
-    // relavent `uefi::fs::FileSystem` method: `root_fs.write(...)`
-    let mut mmap_file = root_dir
-        .open(cstr16!("mmap.csv"), FileMode::CreateReadWrite, FileAttribute::empty())?
-        .into_regular_file().unwrap();
-    for (i, desc) in mmap.entries().enumerate() {
-        let mut content_buffer = ArrayWriter::<0x100>::new();
-        // let mut content_buffer = [0u8; 0x100];
-        writeln!(content_buffer,
-            "{},{:X},{:?},{:08X},{:X},{:X}",
-            i, desc.ty.0, desc.ty, desc.phys_start, desc.page_count, desc.att.bits()
-        ).unwrap();
-        mmap_file.write(content_buffer.as_slice()) // .write(&content_buffer)
-            .map_err(|err|err.to_err_without_payload())?;
-    };
-    mmap_file.flush()?;
+    let mmap = system_table.boot_services()
+        .memory_map(unsafe { &mut MMAP_BUFFER })?;
 
     // read kernel file
     // relavent `uefi::fs::FileSystem` method: `root_fs.metadata(...)` and `root_fs.read(...)` which returns a vector result.
@@ -163,7 +154,6 @@ fn uefi_boot(image_handle: uefi::Handle, system_table: &mut SystemTable<Boot>)
         kernel_entry_addr
     };
 
-    system_table.boot_services().stall(1_000_000); // stall for 1 second
     writeln!(system_table.stdout(), "Executing kernel (Entry {:p})", kernel_entry_addr as *const ()).unwrap();
 
     // get graphics output protocol info, into file
@@ -185,11 +175,13 @@ fn uefi_boot(image_handle: uefi::Handle, system_table: &mut SystemTable<Boot>)
     // kernel executing closure with parameters.
     let kernel_main = unsafe {
         let kernel_entry: extern "sysv64" fn(
-            FrameBuffer
+            FrameBuffer,
+            MemoryMap<'_>
         ) -> !
             = core::mem::transmute(kernel_entry_addr);
         move || kernel_entry(
-            frame_buffer
+            frame_buffer,
+            mmap
         )
     };
 
