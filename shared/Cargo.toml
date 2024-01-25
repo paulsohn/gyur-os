@@ -7,5 +7,5 @@ edition = "2021"
 
 [dependencies]
 # freetype-rs = "0.32.0"
-uefi = "0.24.0"
+uefi = { workspace = true }
 volatile = "0.3.0"

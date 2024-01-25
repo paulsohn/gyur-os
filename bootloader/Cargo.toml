@@ -7,9 +7,8 @@ description = "the bootloader part of personal rust implementation of [Mikan OS]
 
 [dependencies]
 shared = { path = "../shared" }
-uefi = { version = "0.24.0", features = ["alloc"] }
-uefi-macros = "0.12.0"
-uefi-services = "0.21.0"
+uefi = { workspace = true }
+uefi-services = { workspace = true }
 elf = { version = "0.7.2", default-features = false }
 
 [build-dependencies]

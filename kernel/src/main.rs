@@ -14,15 +14,13 @@ use kernel::{
 
 #[no_mangle]
 pub extern "sysv64" fn _start (
-    frame_buffer_info: shared::frame_buffer::FrameBuffer,
-    memory_map: shared::memory_map::MemoryMap<'static>,
+    mmap: shared::uefi_memory::MemoryMap<'static>,
+    args: shared::KernelArgs,
 ) -> ! {
     // initialize globals
-    globals::init(
-        frame_buffer_info
-    );
+    globals::init(args);
 
-    for (i, desc) in memory_map.entries().enumerate() {
+    for (i, desc) in mmap.entries().enumerate() {
         log::info!(
             "{},{:X},{:?},{:08X},{:X},{:X}",
             i, desc.ty.0, desc.ty, desc.phys_start, desc.page_count, desc.att.bits()

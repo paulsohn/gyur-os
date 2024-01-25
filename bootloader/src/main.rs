@@ -1,28 +1,29 @@
 #![no_std]
 #![no_main]
+// #![feature(never_type)]
 // #![feature(abi_efiapi)]
 
-extern crate uefi;
-extern crate uefi_services;
-
-extern crate shared;
-
-// TODO: remove direct `uefi` dependency, just re-export it inside `shared` package.
-
-// TODO: specify FFI-safe layout for Memory Map.
-
-use uefi::data_types::{Char16, CStr16};
-use uefi::prelude::*;
-use uefi::table::boot;
-use uefi::proto::{
-    loaded_image::LoadedImage,
-    device_path::DevicePath,
-    media::fs::SimpleFileSystem,
-    media::file::*,
-    console::gop::GraphicsOutput,
-    // console::gop::PixelFormat,
+use shared::KernelArgs;
+use shared::uefi_memory::{
+    MemoryMap,
+    MemoryType,
+    AllocateType,
+    PAGE_SIZE
+}; // this is shortcut of `uefi::table::boot::*`
+use uefi::{
+    self,
+    prelude::*,
+    data_types::{Char16, CStr16},
+    proto::{
+        loaded_image::LoadedImage,
+        device_path::DevicePath,
+        media::fs::SimpleFileSystem,
+        media::file::*,
+        console::gop::GraphicsOutput,
+        // console::gop::PixelFormat,
+    },
+    cstr16,
 };
-use uefi_macros::cstr16;
 
 use elf::ElfBytes;
 use elf::endian::AnyEndian;
@@ -34,20 +35,17 @@ use core::fmt::Write;
 
 // use bootloader::ArrayWriter;
 
-use shared::frame_buffer::FrameBuffer;
-use shared::memory_map::MemoryMap;
-
-static mut MMAP_BUFFER: [u8; 0x4000] = [0u8; 0x4000]; // 16KiB
+// static mut MMAP_BUFFER: [u8; 0x4000] = [0u8; 0x4000]; // 16KiB
 
 #[inline]
-fn uefi_boot(image_handle: uefi::Handle, system_table: &mut SystemTable<Boot>)
--> uefi::Result<impl FnOnce()>
+fn uefi_boot(image_handle: Handle, system_table: &mut SystemTable<Boot>)
+-> uefi::Result<(extern "sysv64" fn(MemoryMap<'static>, KernelArgs), KernelArgs)>
 {
     uefi_services::init(system_table)?;
 
-    // print in stdout
-    system_table.stdout().write_str("Hello, Rust!\n")
-        .unwrap();
+    // // print in stdout
+    // system_table.stdout().write_str("Hello, Rust!\n")
+    //     .unwrap();
     // writeln!(system_table.stdout(), "Hello, rust!\n").unwrap();
 
     // get FAT32 file system for UEFI loader
@@ -59,20 +57,17 @@ fn uefi_boot(image_handle: uefi::Handle, system_table: &mut SystemTable<Boot>)
     // but since we need more than high-level encapsulation `uefi::fs::FileSystem`, we stripped off its method body.
     let mut root_dir = {
         let loaded_image = system_table.boot_services().open_protocol_exclusive::<LoadedImage>(image_handle)?;
-        let device_path = system_table.boot_services().open_protocol_exclusive::<DevicePath>(loaded_image.device())?;
+        let device_path = system_table.boot_services().open_protocol_exclusive::<DevicePath>(loaded_image.device().unwrap())?;
         let device_handle = system_table.boot_services().locate_device_path::<SimpleFileSystem>(&mut &*device_path)?;
 
         system_table.boot_services().open_protocol_exclusive::<SimpleFileSystem>(device_handle)?
             .open_volume()?
     };
 
-    // acquire memory map for later use
-    let mmap = system_table.boot_services()
-        .memory_map(unsafe { &mut MMAP_BUFFER })?;
-
     // read kernel file
     // relavent `uefi::fs::FileSystem` method: `root_fs.metadata(...)` and `root_fs.read(...)` which returns a vector result.
     const KERNEL_FILE_NAME: &CStr16 = cstr16!("kernel.elf");
+
     let mut kernel_file = root_dir
         .open(KERNEL_FILE_NAME, FileMode::Read, FileAttribute::empty())?
         .into_regular_file().unwrap();
@@ -98,7 +93,7 @@ fn uefi_boot(image_handle: uefi::Handle, system_table: &mut SystemTable<Boot>)
     let kernel_entry_addr = {
         // read the kernel and load into temporarily allocated area
         let kernel_buffer_ptr = system_table.boot_services().allocate_pool(
-            boot::MemoryType::LOADER_DATA,
+            MemoryType::LOADER_DATA,
             kernel_file_size
         )?;
         let kernel_buffer_slice = unsafe{ from_raw_parts_mut(kernel_buffer_ptr as *mut u8, kernel_file_size) };
@@ -124,9 +119,9 @@ fn uefi_boot(image_handle: uefi::Handle, system_table: &mut SystemTable<Boot>)
         // allocate real pages
         let kernel_byte_count = (kernel_bound_addr - kernel_base_addr) as usize;
         system_table.boot_services().allocate_pages(
-            boot::AllocateType::Address(kernel_base_addr),
-            boot::MemoryType::LOADER_DATA,
-            (kernel_byte_count + boot::PAGE_SIZE - 1) / boot::PAGE_SIZE
+            AllocateType::Address(kernel_base_addr),
+            MemoryType::LOADER_DATA,
+            (kernel_byte_count + PAGE_SIZE - 1) / PAGE_SIZE
         )?;
 
         // copy segment data into real target, and fill zero if necessary
@@ -149,54 +144,63 @@ fn uefi_boot(image_handle: uefi::Handle, system_table: &mut SystemTable<Boot>)
 
         // abandon the temp buffer
         // can we make this auto-drop?
-        system_table.boot_services().free_pool(kernel_buffer_ptr)?;
+        unsafe {
+            system_table.boot_services().free_pool(kernel_buffer_ptr)?;
+        }
 
         kernel_entry_addr
     };
 
     writeln!(system_table.stdout(), "Executing kernel (Entry {:p})", kernel_entry_addr as *const ()).unwrap();
 
-    // get graphics output protocol info, into file
+    // get graphics output protocol info.
     // guess that if we open GOP protocol then stdout becomes no longer valid.
     // so we keep this process as late as possible.
-    let frame_buffer = {
+    let (gop_frame_buffer, gop_mode_info) = {
         let gop_handle = system_table.boot_services().get_handle_for_protocol::<GraphicsOutput>()?;
         let mut gop = system_table.boot_services().open_protocol_exclusive::<GraphicsOutput>(gop_handle)?;
 
         // can select other GOP modes (iterate by `gop.modes()`)
         // but we will choose the default selected mode.
         // @TODO: can we set mode at runtime(by kernel)?
-
-        FrameBuffer::new( gop.frame_buffer().as_mut_ptr(), gop.current_mode_info() )
-    };
-
-    system_table.boot_services().stall(1_000_000);
-
-    // kernel executing closure with parameters.
-    let kernel_main = unsafe {
-        let kernel_entry: extern "sysv64" fn(
-            FrameBuffer,
-            MemoryMap<'_>
-        ) -> !
-            = core::mem::transmute(kernel_entry_addr);
-        move || kernel_entry(
-            frame_buffer,
-            mmap
+        (
+            // gop.frame_buffer(),
+            unsafe { core::mem::transmute(
+                gop.frame_buffer()
+            ) }, // @TODO: A frame buffer should have no lifetime. Open an issue (on `uefi` crate) for this.
+            gop.current_mode_info()
         )
     };
 
-    Ok(kernel_main)
+    // system_table.boot_services().stall(500_000);
+
+    let kernel_entry: extern "sysv64" fn(
+        MemoryMap<'static>,
+        KernelArgs
+    ) = unsafe {
+        core::mem::transmute(kernel_entry_addr)
+    };
+
+    let args = KernelArgs {
+        gop_frame_buffer,
+        gop_mode_info,
+    };
+
+    Ok((kernel_entry, args))
 }
 
 #[entry]
-fn uefi_start(image_handle: uefi::Handle, mut system_table: SystemTable<Boot>) -> Status {
+fn uefi_start(image_handle: Handle, mut system_table: SystemTable<Boot>) -> Status {
     match uefi_boot(image_handle, &mut system_table){
-        Ok(kernel_main) => {
+        Ok((kernel_entry, args)) => {
             // exit the booting process.
-            let _ = system_table.exit_boot_services();
+            let (_system_table, mmap) = system_table.exit_boot_services(MemoryType::LOADER_DATA);
 
             // alright. let's roll!
-            kernel_main();
+            kernel_entry(
+                mmap,
+                args
+            );
 
             Status::SUCCESS
         },

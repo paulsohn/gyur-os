@@ -11,3 +11,7 @@ members = [
     "kernel/usb-xhci",
 ]
 resolver = "2"
+
+[workspace.dependencies]
+uefi = "0.26.0"
+uefi-services = "0.23.0"

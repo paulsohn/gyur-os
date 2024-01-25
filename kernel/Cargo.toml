@@ -20,5 +20,3 @@ pci_types = { path = "./pci_types" }
 apic = { path = "./apic" }
 xhci = { path = "./xhci" }
 usb-xhci = { path = "./usb-xhci" }
-
-

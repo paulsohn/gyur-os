@@ -1,7 +1,7 @@
 
+use crate::geometry::Pos2D;
 use crate::screen::{
     ColorCode,
-    Pos2D,
     Screen
 };
 use crate::sysfont::{

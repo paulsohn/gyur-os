@@ -8,13 +8,11 @@ pub mod xhci;
 pub mod interrupts;
 pub mod message;
 
-use shared::frame_buffer::FrameBuffer;
+use shared::KernelArgs;
 
 /// Initialize global variables.
-pub fn init(
-    frame_buffer: FrameBuffer
-){
-    screen::init(frame_buffer);
+pub fn init(args: KernelArgs){
+    screen::init(args.gop_frame_buffer, args.gop_mode_info);
     console::init();
     logger::init();
 

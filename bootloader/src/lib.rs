@@ -1,5 +1,7 @@
 #![no_std] 
 
+// pub use shared::uefi;
+
 // copy implementation from the answer of:
 // https://stackoverflow.com/questions/50200268/how-can-i-use-the-format-macro-in-a-no-std-environment
 

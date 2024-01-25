@@ -9,6 +9,7 @@
 )]
 
 mod sysfont;
+pub mod geometry;
 pub mod screen;
 pub mod console;
 pub mod cursor;
