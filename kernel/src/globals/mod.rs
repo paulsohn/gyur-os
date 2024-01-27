@@ -4,19 +4,30 @@ pub mod apic;
 pub mod screen;
 pub mod console;
 pub mod logger;
-pub mod xhci;
+
+pub mod paging;
+pub mod segments;
 pub mod interrupts;
+pub mod xhci;
+
 pub mod message;
 
 use shared::KernelArgs;
 
 /// Initialize global variables.
+#[inline]
 pub fn init(args: KernelArgs){
+    // MMIO frame buffer and basic console, logging.
     screen::init(args.gop_frame_buffer, args.gop_mode_info);
     console::init();
     logger::init();
 
-    interrupts::init(); // load IDT first. actuall interrupts should occur AFTER xhci controller is set.
+    // paging and memory.
+    segments::init(); // load GDT and set segment registers.
+    paging::init(); // load the identity(kernel) page table.
+
+    // interrupts and peripharals.
+    interrupts::init(); // load IDT. actuall interrupts should occur AFTER xhci controller is set.
     xhci::init();
 
     x86_64::instructions::interrupts::enable();

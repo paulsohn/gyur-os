@@ -35,8 +35,6 @@ use core::fmt::Write;
 
 // use bootloader::ArrayWriter;
 
-// static mut MMAP_BUFFER: [u8; 0x4000] = [0u8; 0x4000]; // 16KiB
-
 #[inline]
 fn uefi_boot(image_handle: Handle, system_table: &mut SystemTable<Boot>)
 -> uefi::Result<(extern "sysv64" fn(MemoryMap<'static>, KernelArgs), KernelArgs)>
@@ -202,6 +200,7 @@ fn uefi_start(image_handle: Handle, mut system_table: SystemTable<Boot>) -> Stat
                 args
             );
 
+            // unreachable here.
             Status::SUCCESS
         },
         Err(err) => {

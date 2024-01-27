@@ -1,14 +1,16 @@
 [package]
 name = "bootloader"
-version = "1.5.0"
+version = "1.8.0"
 edition = "2021"
 authors = ["Paul Sohn <paulsohn@outlook.kr>"]
 description = "the bootloader part of personal rust implementation of [Mikan OS](https://github.com/uchan-nos/mikanos)"
 
 [dependencies]
 shared = { path = "../shared" }
+
 uefi = { workspace = true }
 uefi-services = { workspace = true }
+
 elf = { version = "0.7.2", default-features = false }
 
 [build-dependencies]

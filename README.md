@@ -44,7 +44,11 @@ After build, run `./sh/run_qemu.sh` for executing QEMU.
 - [x] Day 07B '24.01.23.
   * Message queue for kernel main loop.
   * Used `heapless::mpmc::MpMcQueue` for the event queue.
-    * Seems a bit slow. Maybe we should find an alternative?
+    * Seems like it significantly slows the cursor response. Maybe we should find an alternative?
+- [x] Day 08A '24.01.25.
+  * Acquiring memory map from UEFI bootloader.
+  * Severe refactorings.
+- [ ] Day 08B '24.01.27.
 
 ...and so on.
 

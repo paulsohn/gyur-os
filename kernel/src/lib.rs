@@ -6,6 +6,7 @@
     get_many_mut,
     lazy_cell,
     once_cell_try,
+    const_maybe_uninit_zeroed,
 )]
 
 mod sysfont;

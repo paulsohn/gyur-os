@@ -12,11 +12,30 @@ use kernel::{
     console_println
 };
 
+const KERNEL_MAIN_STACK_SIZE: usize = 0x100000; // 1MB
+static KERNEL_MAIN_STACK: [u8; KERNEL_MAIN_STACK_SIZE] = [0; KERNEL_MAIN_STACK_SIZE];
+
+#[inline]
+pub fn relocate_stack(){
+    // Relocate kernel stack.
+    // This should preceed over any function calls, and the function itself SHOULD BE inline.
+    unsafe {
+        let kernel_main_stack_top = (&KERNEL_MAIN_STACK as *const u8)
+            .add(KERNEL_MAIN_STACK_SIZE);
+        core::arch::asm!(
+            "mov rsp, {}",
+            in(reg) kernel_main_stack_top
+        );
+    }
+}
+
 #[no_mangle]
 pub extern "sysv64" fn _start (
     mmap: shared::uefi_memory::MemoryMap<'static>,
     args: shared::KernelArgs,
 ) -> ! {
+    relocate_stack();
+
     // initialize globals
     globals::init(args);
 
@@ -47,7 +66,9 @@ pub extern "sysv64" fn _start (
 #[panic_handler]
 fn panic_handler(info: &PanicInfo) -> ! {
     // handy way to indicate panic, if QEMU debugger is enabled
-    unsafe{ core::arch::asm!("mov r11, 0xDEAD"); }
+    unsafe {
+        core::arch::asm!("mov r11, 0xDEAD");
+    }
 
     console_println!("{}", info);
     loop { halt() }
