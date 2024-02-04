@@ -10,6 +10,7 @@ use x86_64::PrivilegeLevel;
 
 static mut GDT: GlobalDescriptorTable = GlobalDescriptorTable::new();
 
+#[inline]
 pub fn init(){
     // load GDT.
     unsafe {

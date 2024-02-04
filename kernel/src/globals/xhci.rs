@@ -14,6 +14,7 @@ use super::interrupts::IDT_VEC_XHCI;
 pub static XHC: Mutex<OnceCell<Controller<'static, Listeners>>> = Mutex::new(OnceCell::new());
 
 #[allow(unused_must_use)]
+#[inline]
 pub fn init() {
     let apic = &*super::APIC;
     log::info!("base {:p} / bsp id {}", apic.base_addr.as_ptr(), apic.id().read().id());

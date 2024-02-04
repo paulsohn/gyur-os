@@ -7,6 +7,8 @@
     lazy_cell,
     once_cell_try,
     const_maybe_uninit_zeroed,
+    const_nonnull_new,
+    const_option
 )]
 
 mod sysfont;

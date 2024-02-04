@@ -12,15 +12,20 @@ pub static APIC: LazyLock<Apic> = LazyLock::new(|| unsafe {
     let base_addr = Msr::new(0x1B).read() & 0xfffff000;
     Apic::new(base_addr as usize)
 });
-// /// The BootStrap Processor Local APIC ID
-// pub static BSP_LAPIC_ID: LazyLock<u8> = LazyLock::new(|| {
-//     APIC_BASE.id().read().id()
-// });
+
+// pub static mut APIC: Apic = unsafe { Apic::new(0xfee00000) };
+// #[inline]
+// pub fn init(){
+//     unsafe {
+//         let base_addr = Msr::new(0x1B).read() & 0xfffff000;
+//         APIC = Apic::new(base_addr as usize);
+//     }
+// }
 
 /// An `ApicBase` wrapper just here to mark `ApicBase` sync.
 pub struct Apic(ApicBase);
 impl Apic {
-    pub unsafe fn new(base_addr: usize) -> Self {
+    pub const unsafe fn new(base_addr: usize) -> Self {
         let addr = NonNull::new(base_addr as *mut _).unwrap();
         Self(ApicBase::new(addr))
     }

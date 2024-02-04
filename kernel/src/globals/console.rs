@@ -11,7 +11,8 @@ use x86_64::instructions::interrupts::without_interrupts;
 pub static CONSOLE: Mutex<OnceCell<Console>> = Mutex::new(OnceCell::new());
 
 /// Init [`CONSOLE`].
-/// Should be called after initializing [`SCREEN`].
+/// Should be called after initializing screen.
+#[inline]
 pub fn init(){
     CONSOLE.lock().get_or_init(|| {
         Console::new(&crate::globals::SCREEN) // by invoking `new()`, we also render an empty console rectangle.

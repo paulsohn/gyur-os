@@ -16,6 +16,7 @@ pub const IDT_VEC_XHCI: usize = 0x40;
 // This is static to make its lifetime `'static`.
 static mut IDT: InterruptDescriptorTable = InterruptDescriptorTable::new();
 
+#[inline]
 pub fn init(){
     unsafe {
         IDT.breakpoint.set_handler_fn(breakpoint_handler);

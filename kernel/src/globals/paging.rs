@@ -32,6 +32,7 @@ macro_rules! phys_addr {
     }
 }
 
+#[inline]
 pub fn init() {
     unsafe {
         // prepare the identity mapping

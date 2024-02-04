@@ -2,6 +2,7 @@
 
 static LOGGER: Logger = Logger { filter: log::LevelFilter::Info };
 
+#[inline]
 pub fn init() {
     log::set_logger(&LOGGER).unwrap();
     log::set_max_level(LOGGER.filter);
