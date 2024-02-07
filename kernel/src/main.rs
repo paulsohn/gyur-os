@@ -2,7 +2,7 @@
 #![no_std]
 #![no_main]
 
-extern crate shared;
+// extern crate shared;
 
 use core::panic::PanicInfo;
 
@@ -15,10 +15,10 @@ use kernel::{
 const KERNEL_MAIN_STACK_SIZE: usize = 0x100000; // 1MB
 static KERNEL_MAIN_STACK: [u8; KERNEL_MAIN_STACK_SIZE] = [0; KERNEL_MAIN_STACK_SIZE];
 
-#[inline]
+/// Relocate kernel stack.
+/// This should preceed over any function calls, and the function itself SHOULD BE inline.
+#[inline(always)]
 pub fn relocate_stack(){
-    // Relocate kernel stack.
-    // This should preceed over any function calls, and the function itself SHOULD BE inline.
     unsafe {
         let kernel_main_stack_top = (&KERNEL_MAIN_STACK as *const u8)
             .add(KERNEL_MAIN_STACK_SIZE);
@@ -29,15 +29,29 @@ pub fn relocate_stack(){
     }
 }
 
+/// The entry point invoked by the bootloader.
+/// This is separated from the main function, due to stack relocation.
 #[no_mangle]
 pub extern "sysv64" fn _start (
     mmap: shared::uefi_memory::MemoryMap<'static>,
     args: shared::KernelArgs,
 ) -> ! {
+    // In order to relocate stack safely,
+    // 1. we should not use stack in this function, and
+    // 2. `kernel_main` should not return here.
     relocate_stack();
+    kernel_main(mmap, args)
+}
 
+/// The actual main function of the kernel.
+pub fn kernel_main (
+    mmap: shared::uefi_memory::MemoryMap<'static>,
+    args: shared::KernelArgs,
+) -> ! {
     // initialize globals
     globals::init(args);
+
+    log::info!("init completed");
 
     for (i, desc) in mmap.entries().enumerate() {
         log::info!(

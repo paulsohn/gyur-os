@@ -193,14 +193,14 @@ fn uefi_start(image_handle: Handle, mut system_table: SystemTable<Boot>) -> Stat
         Ok((kernel_entry, args)) => {
             // exit the booting process.
             let (_system_table, mmap) = system_table.exit_boot_services(MemoryType::LOADER_DATA);
-
+            
             // alright. let's roll!
             kernel_entry(
                 mmap,
                 args
             );
 
-            // unreachable here.
+            // actually this is unreachable.
             Status::SUCCESS
         },
         Err(err) => {

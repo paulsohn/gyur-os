@@ -30,25 +30,30 @@ After build, run `./sh/run_qemu.sh` for executing QEMU.
   * Our text formatting heavily depends on `core::fmt::Write` trait.
   * For implementing singletons in rust, one of the easiest implementations is unsafe `static mut`. Instead, I chose to implement mutual-exclusive singleton like `std::sync::OnceLock` by combining `core::cell::OnceCell` and `spin::Mutex`, following @phil-opp fashion. I will switch to `static mut` when more performance-intensive processes are added.
   * Spent a couple of days for debugging that rendering function pauses. I would call this 'self-deadlock' in the sense that a method requiring a mutex lock calls another method requiring the same lock. Of course, this is merely a design mistake, and can be avoided by classifying methods which are able to wait for the lock.
-- [x] Day 06A (Mouse cursor implementation) '23.09.09.
+- [x] **Day 06a (Mouse cursor implementation)** '23.09.09.
   * Implemented PCI scan algorithms, both brute-force and PCI-to-PCI bridge DFS.
   * Modified `./sh/run_qemu.sh` to add `qemu-xhci` device.
-- [x] Day 06B (USB driver implementation) '23.12.02.
-  * Imported xHCI USB driver code into Rust. ~~WHICH TOOK 3 MONTHS~~
+- [x] **Day 06b (USB driver implementation)** '23.12.02. ~~TOOK 3 MONTHS~~
+  * Imported xHCI USB driver code into Rust.
     * The temporary allocator is bump allocator.
     * Ongoing contribution to related open source crates ([accessor](https://github.com/toku-sa-n/accessor) and [xhci](https://github.com/rust-osdev/xhci))
     * Debugging threads: [#158](https://github.com/uchan-nos/os-from-zero/issues/158) and [#159](https://github.com/uchan-nos/os-from-zero/issues/159)
   * Other implementations
-- [x] Day 07A '24.01.21.
-  * Interrupt-based event handling.
-- [x] Day 07B '24.01.23.
+- [x] **Day 07a (Interrupt-base event handling)** '24.01.21.
+- [x] **Day 07b (Message queueing)** '24.01.23.
   * Message queue for kernel main loop.
+    Now interrupt handlers only writes messages into kernel event queue,
+    which results in interrupt handling time reducement.
   * Used `heapless::mpmc::MpMcQueue` for the event queue.
     * Seems like it significantly slows the cursor response. Maybe we should find an alternative?
-- [x] Day 08A '24.01.25.
+- [x] **Day 08a (UEFI Memory Map)** '24.01.25.
   * Acquiring memory map from UEFI bootloader.
   * Severe refactorings.
-- [ ] Day 08B '24.01.27.
+- [x] **Day 08b (Paging and Stack Relocation)** '24.02.07.
+  * Implemented paging, with an identity-mapping page table.
+  * Added (defunct) page fault handler.
+  * Relocating kernel stack. The stack-relocating function should be forced inline, so marked `#[inline(always)]`.
+- [ ] **Day 08c (Memory Management)** '24.02.??.
 
 ...and so on.
 

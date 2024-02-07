@@ -1,0 +1,1 @@
+objdump -d ./target/x86_64-gyur/debug/kernel > ./dump.txt
