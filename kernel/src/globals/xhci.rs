@@ -10,6 +10,7 @@ use core::cell::OnceCell;
 use spin::mutex::Mutex;
 
 use super::interrupts::IDT_VEC_XHCI;
+use super::allocator::global_allocator;
 
 pub static XHC: Mutex<OnceCell<Controller<'static, Listeners>>> = Mutex::new(OnceCell::new());
 
@@ -33,7 +34,7 @@ pub fn init() {
     // Setup xhc controller.
     let xhci_mmio_base = xhci::read_mmio_base(&xhci_ep_acc).unwrap();
     XHC.lock().get_or_init(|| {
-        xhci::setup_xhc_controller(xhci_mmio_base).unwrap()
+        xhci::setup_xhc_controller::<'static, _, _>(xhci_mmio_base, global_allocator()).unwrap()
     });
 }
 

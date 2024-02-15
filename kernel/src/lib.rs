@@ -17,11 +17,12 @@ pub mod screen;
 pub mod console;
 pub mod cursor;
 
+pub mod memmgr;
+pub mod allocator;
+
 pub mod pci;
 pub mod xhci;
 
 pub mod message;
-
-pub mod allocator;
 
 pub mod globals;

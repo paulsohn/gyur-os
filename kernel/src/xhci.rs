@@ -1,3 +1,5 @@
+extern crate alloc;
+
 use crate::pci::{
     scan_all_brute,
     // PciAddress,    
@@ -20,9 +22,10 @@ use crate::pci::{
     },
     acc_map_field,
 };
-use crate::allocator::global_allocator;
 
 use core::ptr::NonNull;
+use core::alloc::Allocator;
+use alloc::alloc::Global;
 
 pub use usb_xhci::controller::Controller;
 pub use usb_xhci::class::{
@@ -102,11 +105,12 @@ pub fn read_mmio_base<'a>(
     }
 }
 
-pub fn setup_xhc_controller<L: SupportedClassListeners>(
-    xhci_mmio_base: u64
-) -> Option<Controller<'static, L>>
+pub fn setup_xhc_controller<'a, L: SupportedClassListeners, A: Allocator + Clone>(
+    xhci_mmio_base: u64,
+    allocator: A,
+) -> Option<Controller<'a, L, A>>
 {
-    let mut xhc = Controller::new(xhci_mmio_base, global_allocator());
+    let mut xhc = Controller::new(xhci_mmio_base, allocator);
     xhc.run();
     xhc.reconfigure_port();
 

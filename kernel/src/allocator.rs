@@ -1,99 +1,69 @@
+//! The allocator. Page manager is separately defined.
+
 extern crate alloc;
 
-// use core::ptr::NonNull;
+use core::ptr::NonNull;
+use core::ops::Deref;
 use core::alloc::{GlobalAlloc, Layout};
 // use alloc::alloc::{Allocator, AllocError};
 
 use spin::mutex::Mutex;
+use linked_list_allocator::Heap; // `LockedHeap` uses lock in the `spinning_top` crate. We will use `spin` instead.
 
-const PAGE_BYTES: usize = 0x1000;
+// use shared::uefi_memory::PAGE_SIZE as UEFI_PAGE_SIZE;
 
-#[derive(Clone, Copy)]
-#[repr(C, align(0x1000))]
-struct Page([u8; PAGE_BYTES]);
-impl Page {
-    const fn new() -> Self {
-        Self([0; PAGE_BYTES])
-    }
-}
+// const KB: usize = 0x400;
+// const MB: usize = KB * KB;
+// const GB: usize = MB * KB;
 
-// bump allocator
+// const KERNEL_PAGE_SIZE: usize = 4 * KB;
 
-#[repr(C)]
-struct BumpArena<const N: usize = 64> {
-    arena: [Page; N],
-    offset: Mutex<[usize; N]>,
-} // only `offset` is subjected to modify.
-impl<const N: usize> BumpArena<N> {
-    const fn new() -> Self {
-        Self {
-            arena: [Page::new(); N],
-            offset: Mutex::new([0; N]),
-        }
-    }
-
-    fn round_up_to(value: usize, alignment: usize) -> usize {
-        (value + alignment - 1) & !(alignment - 1)
-    }
-
-    unsafe fn alloc_mem(&self, layout: Layout) -> *mut u8 {
-        // use crate::console_println as log;
-        // log!("Allocating memory of layout {:?}", layout);
-        
-        let mut offset = self.offset.lock();
-
-        (0..N).find_map(|i| {
-            let result_offset = Self::round_up_to(offset[i], layout.align());
-
-            let next_offset = result_offset + layout.size();
-            if next_offset < PAGE_BYTES {
-                offset[i] = next_offset;
-                let base = &self.arena[i]
-                    as *const _
-                    as *const u8 as *mut u8;
-                
-                Some(base.byte_add(result_offset))
-            } else {
-                None
-            }
-        }).unwrap_or(core::ptr::null_mut())
-    }
-}
-
-unsafe impl<const N: usize> GlobalAlloc for BumpArena<N> {
-    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        self.alloc_mem(layout)
-    }
-
-    unsafe fn dealloc(&self, _ptr: *mut u8, _layout: Layout) {
-        // Do nothing. This is a bump allocator
-    }
-}
-
-// todo: can we avoid setting `global_allocator`?
-
-#[global_allocator]
-static BUMP_ARENA: BumpArena = BumpArena::new();
-
-/// Create an instance of global allocator.
-pub fn global_allocator() -> alloc::alloc::Global {
-    alloc::alloc::Global
-}
+// #[derive(Clone, Copy, Debug)]
+// #[repr(transparent)]
+// struct FrameID(pub usize);
 
 // #[derive(Clone, Copy)]
-// pub struct BumpGlobal;
-
-// unsafe impl Allocator for BumpGlobal {
-//     fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
-//         Ok(unsafe {
-//             NonNull::slice_from_raw_parts(
-//                 NonNull::new(BUMP_ARENA.alloc(layout)).ok_or(AllocError)?,
-//                 layout.size()
-//             )
-//         })
-//     }
-
-//     unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) {
-//         BUMP_ARENA.dealloc(ptr.as_ptr(), layout);
+// #[repr(C, align(0x1000))]
+// struct Page([u8; KERNEL_PAGE_SIZE]);
+// impl Page {
+//     pub const fn new() -> Self {
+//         Self([0; KERNEL_PAGE_SIZE])
 //     }
 // }
+
+
+#[repr(transparent)]
+pub struct GlobalHeap(Mutex<Heap>);
+impl GlobalHeap {
+    pub const fn empty() -> Self {
+        Self(Mutex::new(Heap::empty()))
+    }
+
+    pub unsafe fn init(&self, heap_bottom: *mut u8, heap_size: usize) {
+        self.0.lock().init(heap_bottom, heap_size);
+    }
+}
+
+impl Deref for GlobalHeap {
+    type Target = Mutex<Heap>;
+
+    fn deref(&self) -> &Mutex<Heap> {
+        &self.0
+    }
+}
+
+unsafe impl GlobalAlloc for GlobalHeap {
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        self.0
+            .lock()
+            .allocate_first_fit(layout)
+            .ok()
+            .map_or(core::ptr::null_mut(), |allocation| allocation.as_ptr())
+    }
+
+    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+        self.0
+            .lock()
+            .deallocate(NonNull::new_unchecked(ptr), layout)
+    }
+}

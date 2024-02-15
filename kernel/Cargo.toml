@@ -21,3 +21,5 @@ pci_types = { path = "./pci_types" }
 apic = { path = "./apic" }
 xhci = { path = "./xhci" }
 usb-xhci = { path = "./usb-xhci" }
+linked_list_allocator = "0.10.5"
+spinning_top = "0.3.0"

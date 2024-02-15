@@ -16,12 +16,14 @@ const CONSOLE_ROWS: usize = 25;
 const CONSOLE_COLS: usize = 80;
 
 pub struct Console {
-    screen: &'static Mutex<OnceCell<Screen>>, // note: methods accessing `screen` should be limited to `render()` and `render_one()`, to avoid requiring lock twice ("self-deadlock")
+    screen: &'static Mutex<OnceCell<Screen>>,
+    // note: methods accessing `screen` should be limited to `render()` and `render_one()`,
+    // to avoid requiring lock twice ("self-deadlock")
 
     fg: ColorCode,
     bg: ColorCode,
     buffer: [[u8; CONSOLE_COLS]; CONSOLE_ROWS],
-    // cur_row: usize, // fixed to CONSOLE_ROWS - 1
+    // cur_row: usize, // fixed to `CONSOLE_ROWS - 1`
     cur_col: usize,
 
     // base_x: usize,
