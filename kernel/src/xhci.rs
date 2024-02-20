@@ -25,7 +25,6 @@ use crate::pci::{
 
 use core::ptr::NonNull;
 use core::alloc::Allocator;
-use alloc::alloc::Global;
 
 pub use usb_xhci::controller::Controller;
 pub use usb_xhci::class::{
@@ -61,7 +60,7 @@ pub fn find_msi_cap_acc<'a>(
         .find(|cap| {
             let c: CapabilityHeader = cap.read();
 
-            log::info!("Cap type {}, offset {}", c.id, cap.start_offset());
+            // log::info!("Cap type {}, offset {}", c.id, cap.start_offset());
 
             MsiCapabilityInfo::msi_cap_type(cap) != 0
         })

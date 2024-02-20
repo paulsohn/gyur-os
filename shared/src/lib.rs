@@ -22,7 +22,8 @@ pub mod uefi_gop {
     };
 }
 
-/// kernel argument type
+/// The kernel argument type, which can be provided from bootloading process.
+/// This doesn't include memory map.
 #[derive(Debug, /* Copy, Clone, PartialEq, Eq */)]
 #[repr(C)]
 pub struct KernelArgs {

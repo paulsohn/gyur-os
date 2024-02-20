@@ -49,16 +49,9 @@ pub fn kernel_main (
     args: shared::KernelArgs,
 ) -> ! {
     // initialize globals
-    globals::init(args);
+    globals::init(mmap, args);
 
     log::info!("init completed");
-
-    for (i, desc) in mmap.entries().enumerate() {
-        log::info!(
-            "{},{:X},{:?},{:08X},{:X},{:X}",
-            i, desc.ty.0, desc.ty, desc.phys_start, desc.page_count, desc.att.bits()
-        );
-    }
 
     // log::info!("Hello, GYUR OS!");
 

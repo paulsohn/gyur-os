@@ -8,7 +8,8 @@
     once_cell_try,
     const_maybe_uninit_zeroed,
     const_nonnull_new,
-    const_option
+    const_option,
+    generic_arg_infer,
 )]
 
 mod sysfont;
@@ -17,7 +18,7 @@ pub mod screen;
 pub mod console;
 pub mod cursor;
 
-pub mod memmgr;
+pub mod pgmgr;
 pub mod allocator;
 
 pub mod pci;

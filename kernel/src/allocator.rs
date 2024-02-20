@@ -2,6 +2,8 @@
 
 extern crate alloc;
 
+use crate::pgmgr::KERNEL_PAGE_SIZE;
+
 use core::ptr::NonNull;
 use core::ops::Deref;
 use core::alloc::{GlobalAlloc, Layout};
@@ -9,28 +11,6 @@ use core::alloc::{GlobalAlloc, Layout};
 
 use spin::mutex::Mutex;
 use linked_list_allocator::Heap; // `LockedHeap` uses lock in the `spinning_top` crate. We will use `spin` instead.
-
-// use shared::uefi_memory::PAGE_SIZE as UEFI_PAGE_SIZE;
-
-// const KB: usize = 0x400;
-// const MB: usize = KB * KB;
-// const GB: usize = MB * KB;
-
-// const KERNEL_PAGE_SIZE: usize = 4 * KB;
-
-// #[derive(Clone, Copy, Debug)]
-// #[repr(transparent)]
-// struct FrameID(pub usize);
-
-// #[derive(Clone, Copy)]
-// #[repr(C, align(0x1000))]
-// struct Page([u8; KERNEL_PAGE_SIZE]);
-// impl Page {
-//     pub const fn new() -> Self {
-//         Self([0; KERNEL_PAGE_SIZE])
-//     }
-// }
-
 
 #[repr(transparent)]
 pub struct GlobalHeap(Mutex<Heap>);
@@ -57,7 +37,6 @@ unsafe impl GlobalAlloc for GlobalHeap {
         self.0
             .lock()
             .allocate_first_fit(layout)
-            .ok()
             .map_or(core::ptr::null_mut(), |allocation| allocation.as_ptr())
     }
 
@@ -67,3 +46,59 @@ unsafe impl GlobalAlloc for GlobalHeap {
             .deallocate(NonNull::new_unchecked(ptr), layout)
     }
 }
+
+// pub type Heap = BumpHeap;
+
+// // bump allocator
+// #[repr(C)]
+// pub struct BumpHeap {
+//     base: *mut u8,
+//     limit: usize,
+//     offset: usize,
+// }
+// impl BumpHeap {
+//     pub const fn empty() -> Self {
+//         Self {
+//             base: core::ptr::null_mut(),
+//             limit: 0,
+//             offset: 0,
+//         }
+//     }
+
+//     pub fn init(&mut self, base: *mut u8, limit: usize) {
+//         self.base = base;
+//         self.limit = limit;
+//         self.offset = 0;
+//     }
+
+//     fn round_up_to(value: usize, alignment: usize) -> usize {
+//         (value + alignment - 1) & !(alignment - 1)
+//     }
+
+//     pub fn allocate_first_fit(&mut self, layout: Layout) -> Result<NonNull<u8>, ()> {
+//         self.offset = Self::round_up_to(self.offset, layout.align());
+
+//         if (self.offset + layout.size()) / KERNEL_PAGE_SIZE != self.offset / KERNEL_PAGE_SIZE {
+//             self.offset = Self::round_up_to(self.offset, KERNEL_PAGE_SIZE);
+//         }
+        
+//         let result_offset = self.offset;
+//         let next_offset = self.offset + layout.size();
+
+//         if next_offset > self.limit {
+//             Err(())
+//         } else {
+//             // log::info!("alloc {:?}", unsafe{ self.base.byte_add(result_offset) });
+//             self.offset = next_offset;
+//             Ok(unsafe {
+//                 NonNull::new_unchecked(self.base.byte_add(result_offset))
+//             })
+//         }
+//     }
+
+//     pub fn deallocate(&mut self, ptr: NonNull<u8>, layout: Layout) {
+//         // do nothing. this is a bump allocator
+//     }
+// }
+// unsafe impl Sync for BumpHeap {}
+// unsafe impl Send for BumpHeap {}

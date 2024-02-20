@@ -53,7 +53,11 @@ After build, run `./sh/run_qemu.sh` for executing QEMU.
   * Implemented paging, with an identity-mapping page table.
   * Added (defunct) page fault handler.
   * Relocating kernel stack. The stack-relocating function should be forced inline, so marked `#[inline(always)]`.
-- [ ] **Day 08c (Memory Management)** '24.02.??.
+- [x] **Day 08c (Memory Management)** '24.02.20.
+  * Attached a 3rd-party linked list allocator, replacing the previous bump allocator.
+  * Added a memory manager, which actually manages page frames. The memory manager reads memory status from UEFI memory map.
+- [ ] **Day 09a (Image Superposition)** '24.02.xx.
+  * ???
 
 ...and so on.
 
