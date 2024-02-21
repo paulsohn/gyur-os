@@ -1,5 +1,5 @@
 
-use crate::geometry::Pos2D;
+use crate::geometry::Disp2D;
 use crate::canvas::ColorCode;
 use crate::screen::Screen;
 use crate::sysfont::{
@@ -45,7 +45,7 @@ impl Console{
     }
 
     /// get the pixel coordinate from given buffer position (i,j).
-    fn screen_coord(&self, (i, j): (usize, usize)) -> Pos2D {
+    fn screen_coord(&self, (i, j): (usize, usize)) -> Disp2D {
         // (base_x+8*j,base_y+16*i)
         (
             (SYSFONT_WIDTH_PX * j) as isize,

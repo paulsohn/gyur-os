@@ -1,6 +1,4 @@
-use crate::geometry::{
-    Pos2D, Rect2D, Disp2D,
-};
+use crate::geometry::Disp2D;
 
 /// Color code.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -41,5 +39,7 @@ pub trait Canvas {
     }
 
     /// Write a color code into specific pixel.
-    fn render_pixel(&mut self, pos: Pos2D, c: ColorCode);
+    ///
+    /// The `disp` parameter should be the displacement from the ltop of the desired canvas.
+    fn render_pixel(&mut self, disp: Disp2D, c: ColorCode);
 }

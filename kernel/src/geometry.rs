@@ -1,6 +1,10 @@
 use core::ops::{Add, AddAssign, Sub, Range};
 
 /// A struct for screen coordinate position.
+/// 
+/// The origin is the screen lefttop corner, so this struct is intended to be used only by screen and window(layer) manager objects.
+///
+/// Ordinary canvases should use `Disp2D` instead.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Pos2D {
     pub x: isize,
@@ -15,16 +19,6 @@ impl Pos2D {
             x: self.x.clamp(ltop.x, rbot.x),
             y: self.y.clamp(ltop.y, rbot.y)
         }
-    }
-
-    /// `self.y`, but used as an index
-    pub fn i(&self) -> usize {
-        self.y as usize
-    }
-
-    /// `self.x`, but used as an index
-    pub fn j(&self) -> usize {
-        self.x as usize
     }
 }
 
@@ -76,6 +70,20 @@ impl From<(isize, isize)> for Disp2D {
     }
 }
 
+impl AddAssign<Disp2D> for Disp2D {
+    fn add_assign(&mut self, rhs: Disp2D) {
+        *self = *self + rhs;
+    }
+}
+
+impl Add<Disp2D> for Disp2D {
+    type Output = Disp2D;
+
+    fn add(self, rhs: Disp2D) -> Self::Output {
+        (self.dx + rhs.dx, self.dy + rhs.dy).into()
+    }
+}
+
 impl Disp2D {
     /// width of the displacement
     pub fn width(&self) -> isize {
@@ -96,6 +104,19 @@ pub struct Rect2D {
 }
 
 impl Rect2D {
+    /// The size of the rectangle, as the displacement vector of the major diagonal
+    pub fn size(&self) -> Disp2D {
+        self.rbot - self.ltop
+    }
+
+    pub fn width(&self) -> isize {
+        self.size().dx
+    }
+
+    pub fn height(&self) -> isize {
+        self.size().dy
+    }
+
     pub fn from_points(p1: Pos2D, p2: Pos2D) -> Self {
         Self {
             ltop: (p1.x.min(p2.x), p1.y.min(p2.y)).into(),
@@ -117,13 +138,13 @@ impl Rect2D {
         )
     }
 
-    pub fn iterate_abs<F: FnMut(Pos2D)>(&self, mut f: F) {
-        for x in self.ltop.x .. self.rbot.x {
-            for y in self.ltop.y .. self.rbot.y {
-                f((x,y).into());
-            }
-        }
-    }
+    // pub fn iterate_abs<F: FnMut(Pos2D)>(&self, mut f: F) {
+    //     for x in self.ltop.x .. self.rbot.x {
+    //         for y in self.ltop.y .. self.rbot.y {
+    //             f((x,y).into());
+    //         }
+    //     }
+    // }
 
     pub fn iterate_disp<F: FnMut(Disp2D)>(&self, mut f: F) {
         let diag = self.rbot - self.ltop;

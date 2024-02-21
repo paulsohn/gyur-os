@@ -1,6 +1,6 @@
 extern crate alloc;
 
-use crate::geometry::{Disp2D, Pos2D, Rect2D};
+use crate::geometry::{Disp2D, Rect2D};
 use crate::canvas::{ColorCode, Canvas};
 // use crate::screen::Screen;
 
@@ -16,19 +16,18 @@ pub struct Window {
     /// transparent color. `None` if every color code is valid.
     bg: Option<ColorCode>,
 
-    width: isize,
-    height: isize,
+    rect: Rect2D,
 
     data: Vec<Vec<ColorCode>>,
 }
 
 impl Canvas for Window {
     fn size(&self) -> Disp2D {
-        (self.width, self.height).into()
+        self.rect.size()
     }
 
-    fn render_pixel(&mut self, pos: Pos2D, c: ColorCode) {
-        self[pos] = c;
+    fn render_pixel(&mut self, disp: Disp2D, c: ColorCode) {
+        self[disp] = c;
     }
 }
 
@@ -36,29 +35,26 @@ impl Window {
     /// Creates a new window with the given size.
     /// 
     /// Requires dynamic allocation.
-    pub fn new(size: Disp2D) -> Self {
+    pub fn new(rect: Rect2D) -> Self {
 
-        let width = size.width();
-        let height = size.height();
+        let width = rect.width() as usize;
+        let height = rect.height() as usize;
 
         // The default transparent color.
         let default_bg = ColorCode::BLACK;
 
         // The empty 2D vector filled with transparent color.
         // requires dynamic allocation.
-        let mut data = Vec::with_capacity(height as usize);
-        data.resize_with(height as usize, || {
-            let mut row = Vec::with_capacity(width as usize);
-            row.resize(width as usize, default_bg);
+        let mut data = Vec::with_capacity(height);
+        data.resize_with(height, || {
+            let mut row = Vec::with_capacity(width);
+            row.resize(width, default_bg);
             row
         });
 
         Self {
             bg: Some(default_bg),
-
-            width,
-            height,
-
+            rect,
             data
         }
     }
@@ -69,19 +65,23 @@ impl Window {
     }
 }
 
-impl Index<Pos2D> for Window {
+impl Index<Disp2D> for Window {
     type Output = ColorCode;
 
-    fn index(&self, index: Pos2D) -> &Self::Output {
-        // assert!(index.x < self.width);
-        // assert!(index.y < self.height);
-        &self.data[index.i()][index.j()]
+    fn index(&self, index: Disp2D) -> &Self::Output {
+        // assert!(index.dx < self.rect.width());
+        // assert!(index.dy < self.rect.height());
+        let i = index.dy as usize;
+        let j = index.dx as usize;
+        &self.data[i][j]
     }
 }
-impl IndexMut<Pos2D> for Window {
-    fn index_mut(&mut self, index: Pos2D) -> &mut Self::Output {
-        // assert!(index.x < self.width);
-        // assert!(index.y < self.height);
-        &mut self.data[index.i()][index.j()]
+impl IndexMut<Disp2D> for Window {
+    fn index_mut(&mut self, index: Disp2D) -> &mut Self::Output {
+        // assert!(index.dx < self.rect.width());
+        // assert!(index.dy < self.rect.height());
+        let i = index.dy as usize;
+        let j = index.dx as usize;
+        &mut self.data[i][j]
     }
 }
