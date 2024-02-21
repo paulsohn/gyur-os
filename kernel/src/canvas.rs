@@ -32,12 +32,12 @@ impl ColorCode {
 /// A canvas interface, which is also called a `PixelWriter`.
 pub trait Canvas {
     /// Returns the size of the canvas.
-    fn size(&self) -> Pos2D;
-    fn width(&self) -> usize {
-        self.size().x
+    fn size(&self) -> Disp2D;
+    fn width(&self) -> isize {
+        self.size().dx
     }
-    fn height(&self) -> usize {
-        self.size().y
+    fn height(&self) -> isize {
+        self.size().dy
     }
 
     /// Write a color code into specific pixel.

@@ -1,32 +1,40 @@
 use core::ops::{Add, AddAssign, Sub, Range};
 
-// todo: isize-based geometry?
-
 /// A struct for screen coordinate position.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Pos2D {
-    pub x: usize,
-    pub y: usize,
+    pub x: isize,
+    pub y: isize,
 }
 
 impl Pos2D {
-    fn bound(&self, boundary: Pos2D) -> Pos2D {
+    pub const ORIGIN: Self = Self { x: 0, y: 0 };
+
+    fn clamp(&self, ltop: Pos2D, rbot: Pos2D) -> Pos2D {
         Pos2D {
-            x: self.x.min(boundary.x),
-            y: self.y.min(boundary.y)
+            x: self.x.clamp(ltop.x, rbot.x),
+            y: self.y.clamp(ltop.y, rbot.y)
         }
+    }
+
+    /// `self.y`, but used as an index
+    pub fn i(&self) -> usize {
+        self.y as usize
+    }
+
+    /// `self.x`, but used as an index
+    pub fn j(&self) -> usize {
+        self.x as usize
     }
 }
 
-impl From<(usize, usize)> for Pos2D {
-    fn from((x, y): (usize, usize)) -> Self {
-        assert!(x <= isize::MAX as usize);
-        assert!(y <= isize::MAX as usize);
+impl From<(isize, isize)> for Pos2D {
+    fn from((x, y): (isize, isize)) -> Self {
         Pos2D { x, y }
     }
 }
 
-impl From<Pos2D> for (usize, usize) {
+impl From<Pos2D> for (isize, isize) {
     fn from(pos: Pos2D) -> Self {
         (pos.x, pos.y)
     }
@@ -43,10 +51,7 @@ impl Add<Disp2D> for Pos2D {
 
     fn add(self, rhs: Disp2D) -> Self::Output {
         // want to use the intrinsic `arith_offset` function.
-        (
-            (self.x as isize).wrapping_add(rhs.dx).clamp(0, isize::MAX) as usize,
-            (self.y as isize).wrapping_add(rhs.dy).clamp(0, isize::MAX) as usize
-        ).into()
+        (self.x + rhs.dx, self.y + rhs.dy).into()
     }
 }
 
@@ -54,10 +59,7 @@ impl Sub<Pos2D> for Pos2D {
     type Output = Disp2D;
 
     fn sub(self, rhs: Pos2D) -> Self::Output {
-        (
-            (self.x as isize) - (rhs.x as isize),
-            (self.y as isize) - (rhs.y as isize),
-        ).into()
+        (self.x - rhs.x, self.y - rhs.y).into()
     }
 }
 
@@ -74,53 +76,72 @@ impl From<(isize, isize)> for Disp2D {
     }
 }
 
-/// A struct for screen rectangular area.
+impl Disp2D {
+    /// width of the displacement
+    pub fn width(&self) -> isize {
+        self.dx.abs()
+    }
+
+    /// height of the displacement
+    pub fn height(&self) -> isize {
+        self.dy.abs()
+    }
+}
+
+/// A struct for a rectangular area.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Rect2D {
-    pub left_top: Pos2D,
-    pub diag: Disp2D,
+    ltop: Pos2D,
+    rbot: Pos2D,
 }
 
 impl Rect2D {
-    pub fn from_lefttop_rightbot(left_top: Pos2D, right_bot: Pos2D) -> Self {
-        Rect2D::from_lefttop_diag(left_top, right_bot - left_top)
-    }
-
-    pub fn from_lefttop_diag_boundary(left_top: Pos2D, diag: Disp2D, boundary: Pos2D) -> Self {
-        let actual_diag = (left_top + diag).bound(boundary) - left_top;
-        Rect2D::from_lefttop_diag(left_top, actual_diag)
-    }
-
-    pub fn from_lefttop_diag(left_top: Pos2D, diag: Disp2D) -> Self {
-        debug_assert!(diag.dx >= 0);
-        debug_assert!(diag.dy >= 0);
-        Rect2D {
-            left_top,
-            diag,
+    pub fn from_points(p1: Pos2D, p2: Pos2D) -> Self {
+        Self {
+            ltop: (p1.x.min(p2.x), p1.y.min(p2.y)).into(),
+            rbot: (p1.x.max(p2.x), p1.y.max(p2.y)).into()
         }
     }
 
-    pub fn from_ranges(x_range: Range<usize>, y_range: Range<usize>) -> Self {
-        Rect2D {
-            left_top: (x_range.start, y_range.start).into(),
-            diag: (x_range.len() as isize, y_range.len() as isize).into(),
-        }
+    pub fn from_ranges(x_range: Range<isize>, y_range: Range<isize>) -> Self {
+        Self::from_points(
+            (x_range.start, y_range.start).into(),
+            (x_range.end, y_range.end).into()
+        )
+    }
+
+    pub fn bound(&self, boundary: Self) -> Self {
+        Self::from_points(
+            self.ltop.clamp(boundary.ltop, boundary.rbot),
+            self.rbot.clamp(boundary.ltop, boundary.rbot),
+        )
     }
 
     pub fn iterate_abs<F: FnMut(Pos2D)>(&self, mut f: F) {
-        let left_top = self.left_top;
-        let right_bot = self.left_top + self.diag;
-        for x in left_top.x .. right_bot.x {
-            for y in left_top.y .. right_bot.y {
+        for x in self.ltop.x .. self.rbot.x {
+            for y in self.ltop.y .. self.rbot.y {
                 f((x,y).into());
             }
         }
     }
 
     pub fn iterate_disp<F: FnMut(Disp2D)>(&self, mut f: F) {
-        for dx in 0..self.diag.dx {
-            for dy in 0..self.diag.dy {
+        let diag = self.rbot - self.ltop;
+        for dx in 0 .. diag.dx {
+            for dy in 0 .. diag.dy {
                 f((dx,dy).into());
+            }
+        }
+    }
+
+    pub fn iterate_disp_bounded<F: FnMut(Disp2D)>(&self, boundary: Rect2D, mut f: F) {
+        let bounded = self.bound(boundary);
+        let ltop_rel = bounded.ltop - self.ltop;
+        let rbot_rel = bounded.rbot - self.ltop;
+
+        for dx in ltop_rel.dx .. rbot_rel.dx {
+            for dy in ltop_rel.dy .. rbot_rel.dy {
+                f((dx, dy).into());
             }
         }
     }

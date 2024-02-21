@@ -45,9 +45,12 @@ impl Console{
     }
 
     /// get the pixel coordinate from given buffer position (i,j).
-    fn screen_coord(&self, (i, j): (usize, usize)) -> Pos2D{
+    fn screen_coord(&self, (i, j): (usize, usize)) -> Pos2D {
         // (base_x+8*j,base_y+16*i)
-        (SYSFONT_WIDTH_PX*j, SYSFONT_HEIGHT_PX*i).into()
+        (
+            (SYSFONT_WIDTH_PX * j) as isize,
+            (SYSFONT_HEIGHT_PX * i) as isize
+        ).into()
     }
 
     /// refresh the screen by rendering chars in buffer.

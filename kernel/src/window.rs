@@ -16,14 +16,14 @@ pub struct Window {
     /// transparent color. `None` if every color code is valid.
     bg: Option<ColorCode>,
 
-    width: usize,
-    height: usize,
+    width: isize,
+    height: isize,
 
     data: Vec<Vec<ColorCode>>,
 }
 
 impl Canvas for Window {
-    fn size(&self) -> Pos2D {
+    fn size(&self) -> Disp2D {
         (self.width, self.height).into()
     }
 
@@ -36,24 +36,28 @@ impl Window {
     /// Creates a new window with the given size.
     /// 
     /// Requires dynamic allocation.
-    pub fn new(size: Pos2D) -> Self {
+    pub fn new(size: Disp2D) -> Self {
+
+        let width = size.width();
+        let height = size.height();
+
         // The default transparent color.
         let default_bg = ColorCode::BLACK;
 
         // The empty 2D vector filled with transparent color.
         // requires dynamic allocation.
-        let mut data = Vec::with_capacity(size.y);
-        data.resize_with(size.y, || {
-            let mut row = Vec::with_capacity(size.x);
-            row.resize(size.x, default_bg);
+        let mut data = Vec::with_capacity(height as usize);
+        data.resize_with(height as usize, || {
+            let mut row = Vec::with_capacity(width as usize);
+            row.resize(width as usize, default_bg);
             row
         });
 
         Self {
             bg: Some(default_bg),
 
-            width: size.x,
-            height: size.y,
+            width,
+            height,
 
             data
         }
@@ -71,13 +75,13 @@ impl Index<Pos2D> for Window {
     fn index(&self, index: Pos2D) -> &Self::Output {
         // assert!(index.x < self.width);
         // assert!(index.y < self.height);
-        &self.data[index.y][index.x]
+        &self.data[index.i()][index.j()]
     }
 }
 impl IndexMut<Pos2D> for Window {
     fn index_mut(&mut self, index: Pos2D) -> &mut Self::Output {
         // assert!(index.x < self.width);
         // assert!(index.y < self.height);
-        &mut self.data[index.y][index.x]
+        &mut self.data[index.i()][index.j()]
     }
 }

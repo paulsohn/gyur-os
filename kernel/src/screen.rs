@@ -13,8 +13,8 @@ use crate::sysfont::{
     SYSFONT_HEIGHT_PX,
 };
 use crate::cursor::{
-    SYSCURSOR_WIDTH,
-    SYSCURSOR_HEIGHT,
+    SYSCURSOR_WIDTH_PX,
+    SYSCURSOR_HEIGHT_PX,
     SYSCURSOR_SHAPE
 };
 
@@ -58,11 +58,11 @@ pub struct Screen {
     size: usize,
 
     /// Horizontal (actual) pixel count.
-    stride: usize,
+    stride: isize,
     /// Horizontal (displayed) pixel count.
-    hor_res: usize,
+    hor_res: isize,
     /// Vertical (displayed) pixel count.
-    ver_res: usize,
+    ver_res: isize,
 
     formatter: &'static dyn Formatter, // this effectively mimics the 'virtual method' pattern in other OOP language.
 
@@ -70,13 +70,13 @@ pub struct Screen {
 }
 
 impl Canvas for Screen {
-    fn size(&self) -> Pos2D {
+    fn size(&self) -> Disp2D {
         (self.hor_res, self.ver_res).into()
     }
 
     fn render_pixel(&mut self, pos: Pos2D, c: ColorCode) {
         let bytes = unsafe {
-            self.base.cast::<PixelBytes>().add(self.stride * pos.y + pos.x)
+            self.base.cast::<PixelBytes>().offset(self.stride * pos.y + pos.x)
         };
 
         self.formatter.write(bytes, c);
@@ -88,9 +88,9 @@ impl Screen {
         Self {
             base: frame_buffer.as_mut_ptr(),
             size: frame_buffer.size(),
-            stride: mode_info.stride(),
-            hor_res: mode_info.resolution().0,
-            ver_res: mode_info.resolution().1,
+            stride: mode_info.stride() as isize,
+            hor_res: mode_info.resolution().0 as isize,
+            ver_res: mode_info.resolution().1 as isize,
 
             formatter: match mode_info.pixel_format() {
                 // `MaybeUninit` should not initialize fourth-byte.
@@ -104,6 +104,13 @@ impl Screen {
         }
     }
 
+    fn boundary(&self) -> Rect2D {
+        Rect2D::from_points(
+            Pos2D::ORIGIN,
+            Pos2D::ORIGIN + self.size()
+        )
+    }
+
     pub fn fill_rect(&mut self, rect: Rect2D, c: ColorCode){
         rect.iterate_abs(|pos| {
             self.render_pixel(pos, c);
@@ -112,23 +119,16 @@ impl Screen {
 
     #[inline]
     pub fn fill_screen(&mut self, c: ColorCode) {
-        self.fill_rect(
-            Rect2D::from_lefttop_rightbot(
-                (0,0).into(),
-                self.size()
-            ),
-            c
-        );
+        self.fill_rect(self.boundary(), c);
     }
     
-    pub fn render_ascii(&mut self, left_top: Pos2D, ch: u8, fg: ColorCode, bg: Option<ColorCode>) {
+    pub fn render_ascii(&mut self, ltop: Pos2D, ch: u8, fg: ColorCode, bg: Option<ColorCode>) {
         // debug_assert!(ch <= 0x7f);
 
-        let rect = Rect2D::from_lefttop_diag_boundary(
-            left_top,
-            (SYSFONT_WIDTH_PX as isize, SYSFONT_HEIGHT_PX as isize).into(),
-            self.size()
-        );
+        let rect = Rect2D::from_points(
+            ltop,
+            ltop + (SYSFONT_WIDTH_PX as isize, SYSFONT_HEIGHT_PX as isize).into()
+        ).bound(self.boundary());
 
         let bmp = &SYSFONT[ch as usize];
 
@@ -139,7 +139,7 @@ impl Screen {
         rect.iterate_disp(|disp| {
             let row = bmp[disp.dy as usize];
             if (row >> disp.dx) & 1 != 0 {
-                self.render_pixel(left_top + disp, fg);
+                self.render_pixel(ltop + disp, fg);
             }
         });
     }
@@ -147,11 +147,10 @@ impl Screen {
 
 impl Screen {
     fn get_cursor_rect(&self) -> Rect2D {
-        Rect2D::from_lefttop_diag_boundary(
+        Rect2D::from_points(
             self.cursor,
-            (SYSCURSOR_WIDTH as isize, SYSCURSOR_HEIGHT as isize).into(),
-            self.size(),
-        )
+            self.cursor + (SYSCURSOR_WIDTH_PX as isize, SYSCURSOR_HEIGHT_PX as isize).into()
+        ).bound(self.boundary())
     }
 
     pub fn render_cursor(&mut self) {
