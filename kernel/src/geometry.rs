@@ -1,5 +1,7 @@
 use core::ops::{Add, AddAssign, Sub, Range};
 
+// todo: isize-based geometry?
+
 /// A struct for screen coordinate position.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Pos2D {
@@ -41,10 +43,10 @@ impl Add<Disp2D> for Pos2D {
 
     fn add(self, rhs: Disp2D) -> Self::Output {
         // want to use the intrinsic `arith_offset` function.
-        Pos2D::from((
+        (
             (self.x as isize).wrapping_add(rhs.dx).clamp(0, isize::MAX) as usize,
             (self.y as isize).wrapping_add(rhs.dy).clamp(0, isize::MAX) as usize
-        ))
+        ).into()
     }
 }
 
@@ -52,10 +54,10 @@ impl Sub<Pos2D> for Pos2D {
     type Output = Disp2D;
 
     fn sub(self, rhs: Pos2D) -> Self::Output {
-        Disp2D::from((
+        (
             (self.x as isize) - (rhs.x as isize),
             (self.y as isize) - (rhs.y as isize),
-        ))
+        ).into()
     }
 }
 

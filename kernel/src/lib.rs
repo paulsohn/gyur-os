@@ -14,6 +14,7 @@
 
 mod sysfont;
 pub mod geometry;
+pub mod canvas;
 pub mod screen;
 pub mod console;
 pub mod cursor;
@@ -23,7 +24,8 @@ pub mod allocator;
 
 pub mod pci;
 pub mod xhci;
-
 pub mod message;
+
+pub mod window;
 
 pub mod globals;

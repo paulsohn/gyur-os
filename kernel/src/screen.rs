@@ -2,6 +2,11 @@ use crate::geometry::{
     Pos2D, Rect2D, Disp2D,
 };
 
+use crate::canvas::{
+    ColorCode,
+    Canvas,
+};
+
 use crate::sysfont::{
     SYSFONT,
     SYSFONT_WIDTH_PX,
@@ -21,34 +26,6 @@ use shared::uefi_gop::{
 
 pub const BYTES_PER_PIXEL: usize = 4;
 pub type PixelBytes = [u8; BYTES_PER_PIXEL];
-
-/// Color code.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct ColorCode {
-    pub r: u8,
-    pub g: u8,
-    pub b: u8,
-}
-
-impl ColorCode {
-    /// Construct a color code with given RGB.
-    #[allow(invalid_value)]
-    pub const fn rgb(r: u8, g: u8, b: u8) -> Self {
-        Self { r, g, b }
-    }
-
-    pub const BLACK  : Self = Self::rgb(0, 0, 0);
-    pub const RED    : Self = Self::rgb(255, 0, 0);
-    pub const GREEN  : Self = Self::rgb(0, 255, 0);
-    pub const BLUE   : Self = Self::rgb(0, 0, 255);
-    pub const CYAN   : Self = Self::rgb(0, 255, 255);
-    pub const MAGENTA: Self = Self::rgb(255, 0, 255);
-    pub const YELLOW : Self = Self::rgb(255, 255, 0);
-    pub const WHITE  : Self = Self::rgb(255, 255, 255);
-
-    pub const GRAY   : Self = Self::rgb(127, 127, 127);
-}
-
 pub trait Formatter {
     fn write(&self, bytes: *mut PixelBytes, c: ColorCode);
 }
@@ -83,13 +60,27 @@ pub struct Screen {
     /// Horizontal (actual) pixel count.
     stride: usize,
     /// Horizontal (displayed) pixel count.
-    pub hor_res: usize,
+    hor_res: usize,
     /// Vertical (displayed) pixel count.
-    pub ver_res: usize,
+    ver_res: usize,
 
     formatter: &'static dyn Formatter, // this effectively mimics the 'virtual method' pattern in other OOP language.
 
     cursor: Pos2D,
+}
+
+impl Canvas for Screen {
+    fn size(&self) -> Pos2D {
+        (self.hor_res, self.ver_res).into()
+    }
+
+    fn render_pixel(&mut self, pos: Pos2D, c: ColorCode) {
+        let bytes = unsafe {
+            self.base.cast::<PixelBytes>().add(self.stride * pos.y + pos.x)
+        };
+
+        self.formatter.write(bytes, c);
+    }
 }
 
 impl Screen {
@@ -109,22 +100,8 @@ impl Screen {
                 _ => unimplemented!("Unsupported pixel format."),
             },
 
-            cursor: Pos2D::from((0, 0)),
+            cursor: (0, 0).into(),
         }
-    }
-
-    #[inline]
-    pub fn resolution(&self) -> Pos2D {
-        ((self.hor_res, self.ver_res)).into()
-    }
-
-    /// write a color code into specific pixel.
-    pub fn render_pixel(&mut self, pos: Pos2D, c: ColorCode) {
-        let bytes = unsafe {
-            self.base.cast::<PixelBytes>().add(self.stride * pos.y + pos.x)
-        };
-
-        self.formatter.write(bytes, c);
     }
 
     pub fn fill_rect(&mut self, rect: Rect2D, c: ColorCode){
@@ -138,7 +115,7 @@ impl Screen {
         self.fill_rect(
             Rect2D::from_lefttop_rightbot(
                 (0,0).into(),
-                self.resolution()
+                self.size()
             ),
             c
         );
@@ -150,7 +127,7 @@ impl Screen {
         let rect = Rect2D::from_lefttop_diag_boundary(
             left_top,
             (SYSFONT_WIDTH_PX as isize, SYSFONT_HEIGHT_PX as isize).into(),
-            self.resolution()
+            self.size()
         );
 
         let bmp = &SYSFONT[ch as usize];
@@ -173,7 +150,7 @@ impl Screen {
         Rect2D::from_lefttop_diag_boundary(
             self.cursor,
             (SYSCURSOR_WIDTH as isize, SYSCURSOR_HEIGHT as isize).into(),
-            self.resolution(),
+            self.size(),
         )
     }
 
