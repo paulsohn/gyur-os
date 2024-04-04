@@ -2,7 +2,7 @@
 
 extern crate alloc;
 
-use crate::pgmgr::KERNEL_PAGE_SIZE;
+// use crate::pgmgr::KERNEL_PAGE_SIZE;
 
 use core::ptr::NonNull;
 use core::ops::Deref;

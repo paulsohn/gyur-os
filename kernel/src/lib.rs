@@ -2,11 +2,9 @@
 #![feature(
     abi_x86_interrupt,
     allocator_api,
-    pointer_byte_offsets,
     get_many_mut,
     lazy_cell,
     once_cell_try,
-    const_maybe_uninit_zeroed,
     const_nonnull_new,
     const_option,
     generic_arg_infer,

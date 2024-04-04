@@ -11,7 +11,7 @@ use shared::uefi_memory::{
     PAGE_SIZE
 }; // this is shortcut of `uefi::table::boot::*`
 use uefi::{
-    self,
+    // self,
     prelude::*,
     data_types::{Char16, CStr16},
     proto::{

@@ -58,7 +58,7 @@ pub fn find_msi_cap_acc<'a>(
 {
     EndpointHeader::capabilities(ep_acc)
         .find(|cap| {
-            let c: CapabilityHeader = cap.read();
+            let _c: CapabilityHeader = cap.read();
 
             // log::info!("Cap type {}, offset {}", c.id, cap.start_offset());
 

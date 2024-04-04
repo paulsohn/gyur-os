@@ -55,7 +55,7 @@ pub struct Screen {
     /// The frame buffer base pointer.
     base: *mut u8,
     /// The frame buffer size.
-    size: usize,
+    _size: usize,
 
     /// Horizontal (actual) pixel count.
     stride: isize,
@@ -108,7 +108,7 @@ impl Screen {
     pub fn new(mut frame_buffer: FrameBuffer<'static>, mode_info: ModeInfo) -> Self {
         Self {
             base: frame_buffer.as_mut_ptr(),
-            size: frame_buffer.size(),
+            _size: frame_buffer.size(),
             stride: mode_info.stride() as isize,
             hor_res: mode_info.resolution().0 as isize,
             ver_res: mode_info.resolution().1 as isize,

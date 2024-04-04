@@ -1,4 +1,5 @@
 use core::mem::MaybeUninit;
+use core::ptr::addr_of;
 
 use x86_64::structures::paging::{
     page_table::{
@@ -28,7 +29,7 @@ static mut ID_PML2_ARR: MaybeUninit<[PageTable; ID_PD_CNT]> = MaybeUninit::zeroe
 
 macro_rules! phys_addr {
     ($it:expr) => {
-        PhysAddr::new(&$it as *const _ as usize as u64)
+        PhysAddr::new(addr_of!($it) as usize as u64)
     }
 }
 
